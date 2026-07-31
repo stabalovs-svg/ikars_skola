@@ -47,6 +47,9 @@ const studentPayments = computed(() => payments.value.filter((p) => p.student_id
 const selectedSummary = computed(() => paymentSummary(selected, payments.value))
 const isAccountant = computed(() => role.value === ROLES.ACCOUNTANT)
 const isDirector = computed(() => role.value === ROLES.DIRECTOR)
+const isInstructorRole = computed(() => role.value === ROLES.INSTRUCTOR)
+const selectedIsMine = computed(() => Boolean(selected.id && currentInstructor.value && selected.instructor_id === currentInstructor.value.id))
+const selectedIsUnassigned = computed(() => Boolean(selected.id && !selected.instructor_id))
 const financeDashboard = computed(() => {
   const summaries = students.value.filter((student) => !student.archived).map((student) => paymentSummary(student, payments.value))
   return {
@@ -292,6 +295,42 @@ async function addPayment() {
   flash(t('paymentAdded'))
 }
 
+async function instructorAction(action) {
+  if (!isInstructorRole.value || !selected.id || !currentInstructor.value) return
+  loading.value = true
+  try {
+    if (action === 'claim') {
+      const { data, error: updateError } = await supabase.from('students')
+        .update({ instructor_id: currentInstructor.value.id }).eq('id', selected.id).is('instructor_id', null).select('id')
+      if (updateError) throw updateError
+      if (!data?.length) throw new Error(t('assignmentChanged'))
+      try { await addEvent('instructor_changed', selected.id, '', currentInstructor.value.id, t('studentClaimed')) } catch (eventError) { console.error(eventError) }
+      flash(t('studentClaimed'))
+    } else if (action === 'release') {
+      const { data, error: updateError } = await supabase.from('students')
+        .update({ instructor_id: null }).eq('id', selected.id).eq('instructor_id', currentInstructor.value.id).select('id')
+      if (updateError) throw updateError
+      if (!data?.length) throw new Error(t('assignmentChanged'))
+      try { await addEvent('instructor_changed', selected.id, currentInstructor.value.id, '', t('studentReleased')) } catch (eventError) { console.error(eventError) }
+      flash(t('studentReleased'))
+    } else if (action === 'exam') {
+      const examStatus = 'вождение экзамен'
+      const { data, error: updateError } = await supabase.from('students')
+        .update({ status: examStatus }).eq('id', selected.id).eq('instructor_id', currentInstructor.value.id).select('id')
+      if (updateError) throw updateError
+      if (!data?.length) throw new Error(t('assignmentChanged'))
+      try { await addEvent('status_changed', selected.id, selected.status, examStatus, t('sentToExam')) } catch (eventError) { console.error(eventError) }
+      flash(t('sentToExam'))
+    }
+    modal.value = ''
+    await refresh()
+  } catch (actionError) {
+    flash(actionError.message, true)
+  } finally {
+    loading.value = false
+  }
+}
+
 async function saveSettings() {
   const payload = { school_name: settings.school_name, product_name: settings.product_name, language: settings.language, tagline: settings.tagline, updated_at: new Date().toISOString() }
   const { error: settingsError } = await supabase.from('app_settings').update(payload).eq('id', settings.id || 1)
@@ -508,6 +547,15 @@ onMounted(async () => {
           <label v-if="role !== ROLES.INSTRUCTOR">{{ t('coursePrice') }}<input v-model.number="selected.course_price" type="number" min="0" step="0.01" :disabled="!mayManage"></label>
           <label class="span-2">{{ t('notes') }}<textarea v-model="selected.notes" rows="3" :disabled="!mayManage"></textarea></label>
         </div>
+
+        <section v-if="isInstructorRole && selected.id" class="instructor-actions">
+          <div><p class="eyebrow">{{ t('instructorActions').toUpperCase() }}</p><strong>{{ selectedIsMine ? instructorName(selected.instructor_id) : t('notAssigned') }}</strong></div>
+          <div>
+            <button v-if="selectedIsUnassigned" class="primary" :disabled="loading" @click="instructorAction('claim')">+ {{ t('claimStudent') }}</button>
+            <button v-if="selectedIsMine" class="ghost danger" :disabled="loading" @click="instructorAction('release')">{{ t('releaseStudent') }}</button>
+            <button v-if="selectedIsMine && normalizeStatus(selected.status) !== 'вождение экзамен'" class="dark" :disabled="loading" @click="instructorAction('exam')">{{ t('sendToSchoolExam') }} →</button>
+          </div>
+        </section>
 
         <section v-if="selected.id && role !== ROLES.INSTRUCTOR" class="payments">
           <div class="subhead"><div><p class="eyebrow">{{ t('finance').toUpperCase() }}</p><h3>{{ t('payments') }}</h3></div><strong>{{ formatMoney(selectedSummary.paid) }} <small>/ {{ formatMoney(selectedSummary.price) }}</small></strong></div>
