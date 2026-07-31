@@ -1,0 +1,60 @@
+export const messages = {
+  ru: {
+    workspace: 'Рабочее пространство', overview: 'Обзор', students: 'Ученики', archive: 'Архив', journal: 'Журнал', logout: 'Выйти',
+    dashboard: 'Панель автошколы', archiveStudents: 'Архив учеников', eventLog: 'Журнал событий', settings: 'Настройки', newStudent: 'Новый ученик',
+    totalActive: 'Всего активных', theory: 'Теория', practice: 'Практика', studentsCount: 'учеников', attention: 'Требуют внимания', deadlinesStatuses: 'сроки и статусы', birthdays: 'Дни рождения', next14Days: 'в ближайшие 14 дней',
+    currentStudents: 'Текущие ученики', records: 'записей', searchStudents: 'Имя, телефон, email, договор', active: 'Активные', checkDeadlines: 'Проверить сроки',
+    student: 'Ученик', contacts: 'Контакты', payment: 'Оплата', category: 'Категория', instructor: 'Инструктор', stage: 'Этап', deadline: 'Срок', noContract: 'Без договора', noEmail: 'Нет email', from: 'из', noStudents: 'Подходящих учеников не найдено', notAssigned: 'Не назначен',
+    studentCard: 'Карточка ученика', newRecord: 'Новая запись', archivedRecord: 'Запись находится в архиве', fullName: 'ФИО', phone: 'Телефон', contractNumber: '№ договора', birthDate: 'Дата рождения', status: 'Статус', contractDate: 'Дата договора', durationMonths: 'Срок, месяцев', coursePrice: 'Стоимость курса, €', notes: 'Заметки',
+    finance: 'Финансы', payments: 'Оплаты', left: 'Осталось', extras: 'Доп. услуги', paymentCount: 'Платежей', amount: 'Сумма', add: 'Добавить', noPayments: 'Платежей пока нет', restore: 'Восстановить', toArchive: 'В архив', close: 'Закрыть', save: 'Сохранить',
+    audit: 'Аудит CRM', allTime: 'Всё время', today: 'Сегодня', days7: '7 дней', days30: '30 дней', allEmployees: 'Все сотрудники', allEvents: 'Все события', searchLog: 'Поиск по журналу', employee: 'Сотрудник', noEvents: 'Событий не найдено',
+    system: 'Система', crmSettings: 'Настройки CRM', schoolName: 'Название школы', productName: 'Название продукта', language: 'Язык', tagline: 'Подзаголовок', cancel: 'Отмена',
+    loginCopy: 'Единое рабочее пространство автошколы: ученики, сроки, оплаты и история изменений.', password: 'Пароль', connecting: 'Подключение…', login: 'Войти в CRM', configHint: 'Проверьте Variables и Secrets репозитория GitHub.', focusA: 'Держите обучение', focusB: 'в ясном фокусе.',
+    requiredName: 'Укажите имя ученика', saved: 'Данные сохранены', auditPartial: 'Данные сохранены, но часть записей журнала создать не удалось', created: 'Создан ученик', noArchiveCandidates: 'Кандидатов для автоархива нет', archived: 'Архивировано', errors: 'Ошибок', movedArchive: 'Перенесено в архив', paymentFields: 'Заполните дату и сумму платежа', paymentAdded: 'Платёж добавлен', settingsSaved: 'Настройки сохранены',
+    eventStudentCreated: 'Создан ученик', eventPaymentAdded: 'Добавлен платёж', eventStatusChanged: 'Изменён статус', eventInstructorChanged: 'Изменён инструктор', eventContractChanged: 'Изменён договор', eventStudentUpdated: 'Обновлены данные', eventStudentArchived: 'Ученик архивирован', eventStudentRestored: 'Ученик восстановлен',
+  },
+  lv: {
+    workspace: 'Darba vide', overview: 'Pārskats', students: 'Audzēkņi', archive: 'Arhīvs', journal: 'Žurnāls', logout: 'Iziet',
+    dashboard: 'Autoskolas panelis', archiveStudents: 'Audzēkņu arhīvs', eventLog: 'Notikumu žurnāls', settings: 'Iestatījumi', newStudent: 'Jauns audzēknis',
+    totalActive: 'Aktīvie kopā', theory: 'Teorija', practice: 'Prakse', studentsCount: 'audzēkņi', attention: 'Jāpievērš uzmanība', deadlinesStatuses: 'termiņi un statusi', birthdays: 'Dzimšanas dienas', next14Days: 'nākamajās 14 dienās',
+    currentStudents: 'Pašreizējie audzēkņi', records: 'ieraksti', searchStudents: 'Vārds, tālrunis, e-pasts, līgums', active: 'Aktīvie', checkDeadlines: 'Pārbaudīt termiņus',
+    student: 'Audzēknis', contacts: 'Kontakti', payment: 'Maksājumi', category: 'Kategorija', instructor: 'Instruktors', stage: 'Posms', deadline: 'Termiņš', noContract: 'Bez līguma', noEmail: 'Nav e-pasta', from: 'no', noStudents: 'Atbilstoši audzēkņi nav atrasti', notAssigned: 'Nav piešķirts',
+    studentCard: 'Audzēkņa kartīte', newRecord: 'Jauns ieraksts', archivedRecord: 'Ieraksts atrodas arhīvā', fullName: 'Vārds, uzvārds', phone: 'Tālrunis', contractNumber: 'Līguma Nr.', birthDate: 'Dzimšanas datums', status: 'Statuss', contractDate: 'Līguma datums', durationMonths: 'Termiņš mēnešos', coursePrice: 'Kursa cena, €', notes: 'Piezīmes',
+    finance: 'Finanses', payments: 'Maksājumi', left: 'Atlikums', extras: 'Papildu pakalpojumi', paymentCount: 'Maksājumu skaits', amount: 'Summa', add: 'Pievienot', noPayments: 'Maksājumu vēl nav', restore: 'Atjaunot', toArchive: 'Arhivēt', close: 'Aizvērt', save: 'Saglabāt',
+    audit: 'CRM audits', allTime: 'Viss periods', today: 'Šodien', days7: '7 dienas', days30: '30 dienas', allEmployees: 'Visi darbinieki', allEvents: 'Visi notikumi', searchLog: 'Meklēt žurnālā', employee: 'Darbinieks', noEvents: 'Notikumi nav atrasti',
+    system: 'Sistēma', crmSettings: 'CRM iestatījumi', schoolName: 'Autoskolas nosaukums', productName: 'Produkta nosaukums', language: 'Valoda', tagline: 'Apakšvirsraksts', cancel: 'Atcelt',
+    loginCopy: 'Vienota autoskolas darba vide audzēkņiem, termiņiem, maksājumiem un izmaiņu vēsturei.', password: 'Parole', connecting: 'Savienojas…', login: 'Ieiet CRM', configHint: 'Pārbaudiet GitHub repozitorija Variables un Secrets.', focusA: 'Mācību process', focusB: 'skaidrā fokusā.',
+    requiredName: 'Norādiet audzēkņa vārdu', saved: 'Dati saglabāti', auditPartial: 'Dati saglabāti, bet dažus žurnāla ierakstus neizdevās izveidot', created: 'Audzēknis izveidots', noArchiveCandidates: 'Nav ierakstu automātiskai arhivēšanai', archived: 'Arhivēti', errors: 'Kļūdas', movedArchive: 'Pārvietoti uz arhīvu', paymentFields: 'Aizpildiet maksājuma datumu un summu', paymentAdded: 'Maksājums pievienots', settingsSaved: 'Iestatījumi saglabāti',
+    eventStudentCreated: 'Audzēknis izveidots', eventPaymentAdded: 'Maksājums pievienots', eventStatusChanged: 'Statuss mainīts', eventInstructorChanged: 'Instruktors mainīts', eventContractChanged: 'Līgums mainīts', eventStudentUpdated: 'Dati atjaunināti', eventStudentArchived: 'Audzēknis arhivēts', eventStudentRestored: 'Audzēknis atjaunots',
+  },
+  en: {
+    workspace: 'Workspace', overview: 'Overview', students: 'Students', archive: 'Archive', journal: 'Log', logout: 'Sign out',
+    dashboard: 'Driving school dashboard', archiveStudents: 'Student archive', eventLog: 'Event log', settings: 'Settings', newStudent: 'New student',
+    totalActive: 'Total active', theory: 'Theory', practice: 'Practice', studentsCount: 'students', attention: 'Needs attention', deadlinesStatuses: 'deadlines and statuses', birthdays: 'Birthdays', next14Days: 'in the next 14 days',
+    currentStudents: 'Current students', records: 'records', searchStudents: 'Name, phone, email, contract', active: 'Active', checkDeadlines: 'Check deadlines',
+    student: 'Student', contacts: 'Contacts', payment: 'Payment', category: 'Category', instructor: 'Instructor', stage: 'Stage', deadline: 'Deadline', noContract: 'No contract', noEmail: 'No email', from: 'of', noStudents: 'No matching students found', notAssigned: 'Not assigned',
+    studentCard: 'Student profile', newRecord: 'New record', archivedRecord: 'This record is archived', fullName: 'Full name', phone: 'Phone', contractNumber: 'Contract No.', birthDate: 'Date of birth', status: 'Status', contractDate: 'Contract date', durationMonths: 'Duration, months', coursePrice: 'Course price, €', notes: 'Notes',
+    finance: 'Finance', payments: 'Payments', left: 'Remaining', extras: 'Extra services', paymentCount: 'Payments', amount: 'Amount', add: 'Add', noPayments: 'No payments yet', restore: 'Restore', toArchive: 'Archive', close: 'Close', save: 'Save',
+    audit: 'CRM audit', allTime: 'All time', today: 'Today', days7: '7 days', days30: '30 days', allEmployees: 'All employees', allEvents: 'All events', searchLog: 'Search event log', employee: 'Employee', noEvents: 'No events found',
+    system: 'System', crmSettings: 'CRM settings', schoolName: 'School name', productName: 'Product name', language: 'Language', tagline: 'Tagline', cancel: 'Cancel',
+    loginCopy: 'One workspace for students, deadlines, payments and the complete change history.', password: 'Password', connecting: 'Connecting…', login: 'Sign in to CRM', configHint: 'Check the repository Variables and Secrets in GitHub.', focusA: 'Keep every lesson', focusB: 'clearly in focus.',
+    requiredName: 'Enter the student name', saved: 'Data saved', auditPartial: 'Data saved, but some audit entries could not be created', created: 'Student created', noArchiveCandidates: 'No candidates for automatic archiving', archived: 'Archived', errors: 'Errors', movedArchive: 'Moved to archive', paymentFields: 'Enter the payment date and amount', paymentAdded: 'Payment added', settingsSaved: 'Settings saved',
+    eventStudentCreated: 'Student created', eventPaymentAdded: 'Payment added', eventStatusChanged: 'Status changed', eventInstructorChanged: 'Instructor changed', eventContractChanged: 'Contract changed', eventStudentUpdated: 'Student updated', eventStudentArchived: 'Student archived', eventStudentRestored: 'Student restored',
+  },
+}
+
+export const statusLabels = {
+  ru: { 'оформление': 'Оформление', 'теория': 'Теория', 'теория сдана': 'Теория сдана', 'вождение': 'Вождение', 'вождение экзамен': 'Экзамен по вождению', 'вождение сдано': 'Вождение сдано' },
+  lv: { 'оформление': 'Noformēšana', 'теория': 'Teorija', 'теория сдана': 'Teorija nokārtota', 'вождение': 'Braukšana', 'вождение экзамен': 'Braukšanas eksāmens', 'вождение сдано': 'Braukšana nokārtota' },
+  en: { 'оформление': 'Registration', 'теория': 'Theory', 'теория сдана': 'Theory passed', 'вождение': 'Driving', 'вождение экзамен': 'Driving exam', 'вождение сдано': 'Driving passed' },
+}
+
+export const paymentLabels = {
+  ru: { 'Теория': 'Теория', 'Вождение': 'Вождение', 'Экзамен': 'Экзамен', 'Медицинская справка': 'Медицинская справка', 'Другое': 'Другое', 'Наличные': 'Наличные', 'Карта': 'Карта', 'Перевод': 'Перевод' },
+  lv: { 'Теория': 'Teorija', 'Вождение': 'Braukšana', 'Экзамен': 'Eksāmens', 'Медицинская справка': 'Medicīniskā izziņa', 'Другое': 'Cits', 'Наличные': 'Skaidra nauda', 'Карта': 'Karte', 'Перевод': 'Pārskaitījums' },
+  en: { 'Теория': 'Theory', 'Вождение': 'Driving', 'Экзамен': 'Exam', 'Медицинская справка': 'Medical certificate', 'Другое': 'Other', 'Наличные': 'Cash', 'Карта': 'Card', 'Перевод': 'Bank transfer' },
+}
+
+export function translate(locale, key) {
+  return messages[locale]?.[key] || messages.ru[key] || key
+}

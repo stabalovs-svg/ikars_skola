@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { configured, configurationError, supabase } from './lib/supabase'
+import logoUrl from './assets/ikars-logo.svg'
+import { paymentLabels, statusLabels, translate } from './lib/i18n'
 import {
   PAYMENT_METHODS, PAYMENT_PURPOSES, ROLES, STATUSES, automaticArchiveReason,
   canAddPayment, canEditSettings, canManage, canSeeEvents, daysUntil, deadline,
-  formatDate, formatMoney, normalizeStatus, paymentSummary,
+  formatDate as formatDateValue, formatMoney as formatMoneyValue, normalizeStatus, paymentSummary,
 } from './lib/crm'
 
 const session = ref(null)
@@ -29,9 +31,16 @@ const eventFilters = reactive({ period: 'all', user: '', type: '', search: '' })
 const sort = reactive({ field: 'full_name', direction: 1 })
 
 const role = computed(() => profile.value?.role || '')
+const locale = computed(() => ['ru', 'lv', 'en'].includes(settings.language) ? settings.language : 'ru')
+const intlLocale = computed(() => ({ ru: 'ru-RU', lv: 'lv-LV', en: 'en-GB' })[locale.value])
+const t = (key) => translate(locale.value, key)
+const statusText = (value) => statusLabels[locale.value]?.[normalizeStatus(value)] || value || '—'
+const paymentText = (value) => paymentLabels[locale.value]?.[value] || value
+const formatDate = (value, withTime = false) => formatDateValue(value, withTime, intlLocale.value)
+const formatMoney = (value) => formatMoneyValue(value, intlLocale.value)
 const mayManage = computed(() => canManage(role.value))
 const mayPay = computed(() => canAddPayment(role.value))
-const instructorName = (id) => instructors.value.find((item) => item.id === id)?.full_name || 'Не назначен'
+const instructorName = (id) => instructors.value.find((item) => item.id === id)?.full_name || t('notAssigned')
 const studentPayments = computed(() => payments.value.filter((p) => p.student_id === selected.id))
 const selectedSummary = computed(() => paymentSummary(selected, payments.value))
 
@@ -173,7 +182,7 @@ async function saveStudent() {
     status: normalizeStatus(selected.status), notes: selected.notes || null, contract_date: selected.contract_date || null,
     contract_duration_months: selected.contract_duration_months || null, course_price: selected.course_price || null,
   }
-  if (!payload.full_name) return flash('Укажите имя ученика', true)
+  if (!payload.full_name) return flash(t('requiredName'), true)
   loading.value = true
   try {
     if (selected.id) {
@@ -194,7 +203,7 @@ async function saveStudent() {
       const eventResults = await Promise.allSettled(pendingEvents.map(([type, oldValue, newValue, description, metadata]) =>
         addEvent(type, selected.id, oldValue, newValue, description, metadata)))
       if (eventResults.some((result) => result.status === 'rejected')) {
-        flash('Данные сохранены, но часть записей журнала создать не удалось', true)
+        flash(t('auditPartial'), true)
       }
     } else {
       const { data, error: insertError } = await supabase.from('students').insert(payload).select().single()
@@ -203,7 +212,7 @@ async function saveStudent() {
     }
     modal.value = ''
     await refresh()
-    flash('Данные сохранены')
+    flash(t('saved'))
   } catch (e) {
     flash(e.message, true)
   } finally {
@@ -230,23 +239,23 @@ async function setArchive(student, value, reason = 'manual', refreshAfter = true
 
 async function autoArchive() {
   const candidates = students.value.filter((s) => !s.archived).map((s) => ({ student: s, reason: automaticArchiveReason(s) })).filter((x) => x.reason)
-  if (!candidates.length) return flash('Кандидатов для автоархива нет')
+  if (!candidates.length) return flash(t('noArchiveCandidates'))
   const results = await Promise.allSettled(candidates.map((item) => setArchive(item.student, true, item.reason, false)))
   await refresh()
   const completed = results.filter((result) => result.status === 'fulfilled' && result.value).length
   const failed = candidates.length - completed
-  flash(failed ? `Архивировано: ${completed}. Ошибок: ${failed}` : `Перенесено в архив: ${completed}`, failed > 0)
+  flash(failed ? `${t('archived')}: ${completed}. ${t('errors')}: ${failed}` : `${t('movedArchive')}: ${completed}`, failed > 0)
 }
 
 async function addPayment() {
-  if (!selected.id || !paymentForm.amount || !paymentForm.payment_date) return flash('Заполните дату и сумму платежа', true)
+  if (!selected.id || !paymentForm.amount || !paymentForm.payment_date) return flash(t('paymentFields'), true)
   const payload = { student_id: selected.id, payment_date: paymentForm.payment_date, purpose: paymentForm.purpose, amount: Number(paymentForm.amount), payment_method: paymentForm.payment_method }
   const { error: paymentError } = await supabase.from('payments').insert(payload)
   if (paymentError) return flash(paymentError.message, true)
   await addEvent('payment_added', selected.id, '', `${payload.amount} €`, `${payload.purpose} — ${payload.amount} € (${payload.payment_method})`, payload)
   paymentForm.amount = ''
   await refresh()
-  flash('Платёж добавлен')
+  flash(t('paymentAdded'))
 }
 
 async function saveSettings() {
@@ -254,7 +263,7 @@ async function saveSettings() {
   const { error: settingsError } = await supabase.from('app_settings').update(payload).eq('id', settings.id || 1)
   if (settingsError) return flash(settingsError.message, true)
   modal.value = ''
-  flash('Настройки сохранены')
+  flash(t('settingsSaved'))
 }
 
 function setSort(field) {
@@ -264,9 +273,9 @@ function setSort(field) {
 
 function eventTitle(type) {
   return ({
-    student_created: 'Создан ученик', payment_added: 'Добавлен платёж', status_changed: 'Изменён статус',
-    instructor_changed: 'Изменён инструктор', contract_changed: 'Изменён договор',
-    student_updated: 'Обновлены данные', student_archived: 'Ученик архивирован', student_restored: 'Ученик восстановлен',
+    student_created: t('eventStudentCreated'), payment_added: t('eventPaymentAdded'), status_changed: t('eventStatusChanged'),
+    instructor_changed: t('eventInstructorChanged'), contract_changed: t('eventContractChanged'),
+    student_updated: t('eventStudentUpdated'), student_archived: t('eventStudentArchived'), student_restored: t('eventStudentRestored'),
   })[type] || type
 }
 
@@ -292,41 +301,41 @@ onMounted(async () => {
       <div class="brand-mark">I</div>
       <p class="eyebrow">IKARS / OPERATIONS</p>
       <h1>{{ settings.product_name }}</h1>
-      <p class="login-copy">Единое рабочее пространство автошколы: ученики, сроки, оплаты и история изменений.</p>
+      <p class="login-copy">{{ t('loginCopy') }}</p>
       <form class="login-form" @submit.prevent="signIn">
         <label>Email<input v-model="login.email" type="email" autocomplete="email" required placeholder="name@school.lv"></label>
-        <label>Пароль<input v-model="login.password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
-        <button class="primary wide" :disabled="loading">{{ loading ? 'Подключение…' : 'Войти в CRM' }}</button>
+        <label>{{ t('password') }}<input v-model="login.password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
+        <button class="primary wide" :disabled="loading">{{ loading ? t('connecting') : t('login') }}</button>
       </form>
-      <p v-if="!configured" class="config-note">{{ configurationError }}. Проверьте Variables и Secrets репозитория GitHub.</p>
+      <p v-if="!configured" class="config-note">{{ configurationError }}. {{ t('configHint') }}</p>
       <p v-if="error" class="message error">{{ error }}</p>
     </section>
-    <aside class="login-art"><span>01</span><strong>Держите обучение<br>в ясном фокусе.</strong></aside>
+    <aside class="login-art"><span>01</span><strong>{{ t('focusA') }}<br>{{ t('focusB') }}</strong></aside>
   </main>
 
   <div v-else class="shell">
     <aside class="sidebar">
-      <div><div class="logo"><span>IK</span>ARS</div><p>{{ settings.school_name }}</p></div>
+      <div><img class="brand-logo" :src="logoUrl" alt="IKARS"><p>{{ settings.school_name }}</p></div>
       <nav>
-        <button class="active">Обзор</button>
-        <button @click="archived = false">Ученики <span>{{ dashboard.total }}</span></button>
-        <button @click="archived = true">Архив</button>
-        <button v-if="canSeeEvents(role)" @click="modal = 'events'">Журнал</button>
+        <button class="active">{{ t('overview') }}</button>
+        <button @click="archived = false">{{ t('students') }} <span>{{ dashboard.total }}</span></button>
+        <button @click="archived = true">{{ t('archive') }}</button>
+        <button v-if="canSeeEvents(role)" @click="modal = 'events'">{{ t('journal') }}</button>
       </nav>
       <div class="user-card">
         <div class="avatar">{{ (profile?.full_name || session.user.email).slice(0, 1).toUpperCase() }}</div>
         <div><strong>{{ profile?.full_name || session.user.email }}</strong><small>{{ role }}</small></div>
-        <button title="Выйти" @click="signOut">↗</button>
+        <button :title="t('logout')" @click="signOut">↗</button>
       </div>
     </aside>
 
     <main class="workspace">
       <header class="topbar">
-        <div><p class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</p><h1>{{ archived ? 'Архив учеников' : 'Панель автошколы' }}</h1></div>
+        <div><p class="eyebrow">{{ t('workspace').toUpperCase() }}</p><h1>{{ archived ? t('archiveStudents') : t('dashboard') }}</h1></div>
         <div class="header-actions">
-          <button v-if="canSeeEvents(role)" class="ghost" @click="modal = 'events'">Журнал событий</button>
-          <button v-if="canEditSettings(role)" class="icon-button" title="Настройки" @click="modal = 'settings'">⚙</button>
-          <button v-if="mayManage" class="primary" @click="openStudent()">+ Новый ученик</button>
+          <button v-if="canSeeEvents(role)" class="ghost" @click="modal = 'events'">{{ t('eventLog') }}</button>
+          <button v-if="canEditSettings(role)" class="icon-button" :title="t('settings')" @click="modal = 'settings'">⚙</button>
+          <button v-if="mayManage" class="primary" @click="openStudent()">+ {{ t('newStudent') }}</button>
         </div>
       </header>
 
@@ -334,41 +343,41 @@ onMounted(async () => {
       <p v-if="notice" class="message success">{{ notice }}</p>
 
       <section class="metrics">
-        <article><span>Всего активных</span><strong>{{ dashboard.total }}</strong><i>↗</i></article>
-        <article><span>Теория</span><strong>{{ dashboard.theory }}</strong><small>учеников</small></article>
-        <article><span>Практика</span><strong>{{ dashboard.practice }}</strong><small>учеников</small></article>
-        <article class="accent"><span>Требуют внимания</span><strong>{{ dashboard.attention }}</strong><small>сроки и статусы</small></article>
-        <article><span>Дни рождения</span><strong>{{ dashboard.birthdays }}</strong><small>в ближайшие 14 дней</small></article>
+        <article><span>{{ t('totalActive') }}</span><strong>{{ dashboard.total }}</strong><i>↗</i></article>
+        <article><span>{{ t('theory') }}</span><strong>{{ dashboard.theory }}</strong><small>{{ t('studentsCount') }}</small></article>
+        <article><span>{{ t('practice') }}</span><strong>{{ dashboard.practice }}</strong><small>{{ t('studentsCount') }}</small></article>
+        <article class="accent"><span>{{ t('attention') }}</span><strong>{{ dashboard.attention }}</strong><small>{{ t('deadlinesStatuses') }}</small></article>
+        <article><span>{{ t('birthdays') }}</span><strong>{{ dashboard.birthdays }}</strong><small>{{ t('next14Days') }}</small></article>
       </section>
 
       <section class="data-card">
         <div class="section-head">
-          <div><h2>{{ archived ? 'Архив' : 'Текущие ученики' }}</h2><p>{{ visibleStudents.length }} записей</p></div>
+          <div><h2>{{ archived ? t('archive') : t('currentStudents') }}</h2><p>{{ visibleStudents.length }} {{ t('records') }}</p></div>
           <div class="filters">
-            <label class="search">⌕<input v-model="search" placeholder="Имя, телефон, email, договор"></label>
-            <button class="ghost" @click="archived = !archived">{{ archived ? 'Активные' : 'Архив' }}</button>
-            <button v-if="mayManage && !archived" class="ghost" @click="autoArchive">Проверить сроки</button>
+            <label class="search">⌕<input v-model="search" :placeholder="t('searchStudents')"></label>
+            <button class="ghost" @click="archived = !archived">{{ archived ? t('active') : t('archive') }}</button>
+            <button v-if="mayManage && !archived" class="ghost" @click="autoArchive">{{ t('checkDeadlines') }}</button>
           </div>
         </div>
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th @click="setSort('full_name')">Ученик ↕</th><th>Контакты</th><th>Оплата</th>
-              <th @click="setSort('category')">Категория ↕</th><th>Инструктор</th>
-              <th @click="setSort('status')">Этап ↕</th><th>Срок</th><th></th>
+              <th @click="setSort('full_name')">{{ t('student') }} ↕</th><th>{{ t('contacts') }}</th><th>{{ t('payment') }}</th>
+              <th @click="setSort('category')">{{ t('category') }} ↕</th><th>{{ t('instructor') }}</th>
+              <th @click="setSort('status')">{{ t('stage') }} ↕</th><th>{{ t('deadline') }}</th><th></th>
             </tr></thead>
             <tbody>
               <tr v-for="student in visibleStudents" :key="student.id">
-                <td><button class="student-link" @click="openStudent(student)">{{ student.full_name }}</button><small>{{ student.contract_number || 'Без договора' }}</small></td>
-                <td>{{ student.phone || '—' }}<small>{{ student.email || 'Нет email' }}</small></td>
-                <td><strong>{{ formatMoney(paymentSummary(student, payments).paid) }}</strong><small>из {{ formatMoney(student.course_price) }}</small></td>
+                <td><button class="student-link" @click="openStudent(student)">{{ student.full_name }}</button><small>{{ student.contract_number || t('noContract') }}</small></td>
+                <td>{{ student.phone || '—' }}<small>{{ student.email || t('noEmail') }}</small></td>
+                <td><strong>{{ formatMoney(paymentSummary(student, payments).paid) }}</strong><small>{{ t('from') }} {{ formatMoney(student.course_price) }}</small></td>
                 <td><span class="category">{{ student.category || '—' }}</span></td>
                 <td>{{ instructorName(student.instructor_id) }}</td>
-                <td><span class="status" :data-status="normalizeStatus(student.status)">{{ student.status || '—' }}</span></td>
+                <td><span class="status" :data-status="normalizeStatus(student.status)">{{ statusText(student.status) }}</span></td>
                 <td><span :class="{ urgent: daysUntil(deadline(student)) !== null && daysUntil(deadline(student)) <= 30 }">{{ deadline(student) ? formatDate(deadline(student)) : '—' }}</span></td>
                 <td><button class="more" @click="openStudent(student)">•••</button></td>
               </tr>
-              <tr v-if="!visibleStudents.length"><td colspan="8" class="empty">Подходящих учеников не найдено</td></tr>
+              <tr v-if="!visibleStudents.length"><td colspan="8" class="empty">{{ t('noStudents') }}</td></tr>
             </tbody>
           </table>
         </div>
@@ -378,66 +387,66 @@ onMounted(async () => {
 
   <div v-if="modal" class="modal-backdrop" @mousedown.self="modal = ''">
     <section v-if="modal === 'student'" class="modal student-modal">
-      <header><div><p class="eyebrow">{{ selected.id ? 'КАРТОЧКА УЧЕНИКА' : 'НОВАЯ ЗАПИСЬ' }}</p><h2>{{ selected.full_name || 'Новый ученик' }}</h2></div><button class="close" @click="modal = ''">×</button></header>
-      <div v-if="selected.archived" class="archive-banner">Запись находится в архиве · {{ selected.archive_reason }}</div>
+      <header><div><p class="eyebrow">{{ (selected.id ? t('studentCard') : t('newRecord')).toUpperCase() }}</p><h2>{{ selected.full_name || t('newStudent') }}</h2></div><button class="close" @click="modal = ''">×</button></header>
+      <div v-if="selected.archived" class="archive-banner">{{ t('archivedRecord') }} · {{ selected.archive_reason }}</div>
       <div class="modal-scroll">
         <div class="form-grid">
-          <label class="span-2">ФИО<input v-model="selected.full_name" :disabled="!mayManage" required></label>
-          <label>Телефон<input v-model="selected.phone" :disabled="!mayManage"></label>
+          <label class="span-2">{{ t('fullName') }}<input v-model="selected.full_name" :disabled="!mayManage" required></label>
+          <label>{{ t('phone') }}<input v-model="selected.phone" :disabled="!mayManage"></label>
           <label>Email<input v-model="selected.email" type="email" :disabled="!mayManage"></label>
-          <label>№ договора<input v-model="selected.contract_number" :disabled="!mayManage"></label>
-          <label>Категория<input v-model="selected.category" :disabled="!mayManage"></label>
-          <label>Дата рождения<input v-model="selected.birth_date" type="date" :disabled="!mayManage"></label>
-          <label>Инструктор<select v-model="selected.instructor_id" :disabled="!mayManage"><option :value="null">Не назначен</option><option v-for="item in instructors" :key="item.id" :value="item.id">{{ item.full_name }}</option></select></label>
-          <label>Статус<select v-model="selected.status" :disabled="!mayManage"><option v-for="item in STATUSES" :key="item">{{ item }}</option></select></label>
-          <label>Дата договора<input v-model="selected.contract_date" type="date" :disabled="!mayManage"></label>
-          <label>Срок, месяцев<input v-model.number="selected.contract_duration_months" type="number" min="1" :disabled="!mayManage"></label>
-          <label>Стоимость курса, €<input v-model.number="selected.course_price" type="number" min="0" step="0.01" :disabled="!mayManage"></label>
-          <label class="span-2">Заметки<textarea v-model="selected.notes" rows="3" :disabled="!mayManage"></textarea></label>
+          <label>{{ t('contractNumber') }}<input v-model="selected.contract_number" :disabled="!mayManage"></label>
+          <label>{{ t('category') }}<input v-model="selected.category" :disabled="!mayManage"></label>
+          <label>{{ t('birthDate') }}<input v-model="selected.birth_date" type="date" :disabled="!mayManage"></label>
+          <label>{{ t('instructor') }}<select v-model="selected.instructor_id" :disabled="!mayManage"><option :value="null">{{ t('notAssigned') }}</option><option v-for="item in instructors" :key="item.id" :value="item.id">{{ item.full_name }}</option></select></label>
+          <label>{{ t('status') }}<select v-model="selected.status" :disabled="!mayManage"><option v-for="item in STATUSES" :key="item" :value="item">{{ statusText(item) }}</option></select></label>
+          <label>{{ t('contractDate') }}<input v-model="selected.contract_date" type="date" :disabled="!mayManage"></label>
+          <label>{{ t('durationMonths') }}<input v-model.number="selected.contract_duration_months" type="number" min="1" :disabled="!mayManage"></label>
+          <label>{{ t('coursePrice') }}<input v-model.number="selected.course_price" type="number" min="0" step="0.01" :disabled="!mayManage"></label>
+          <label class="span-2">{{ t('notes') }}<textarea v-model="selected.notes" rows="3" :disabled="!mayManage"></textarea></label>
         </div>
 
         <section v-if="selected.id" class="payments">
-          <div class="subhead"><div><p class="eyebrow">ФИНАНСЫ</p><h3>Оплаты</h3></div><strong>{{ formatMoney(selectedSummary.paid) }} <small>/ {{ formatMoney(selectedSummary.price) }}</small></strong></div>
-          <div class="payment-metrics"><span>Осталось <b>{{ formatMoney(selectedSummary.left) }}</b></span><span>Доп. услуги <b>{{ formatMoney(selectedSummary.extra) }}</b></span><span>Платежей <b>{{ selectedSummary.count }}</b></span></div>
+          <div class="subhead"><div><p class="eyebrow">{{ t('finance').toUpperCase() }}</p><h3>{{ t('payments') }}</h3></div><strong>{{ formatMoney(selectedSummary.paid) }} <small>/ {{ formatMoney(selectedSummary.price) }}</small></strong></div>
+          <div class="payment-metrics"><span>{{ t('left') }} <b>{{ formatMoney(selectedSummary.left) }}</b></span><span>{{ t('extras') }} <b>{{ formatMoney(selectedSummary.extra) }}</b></span><span>{{ t('paymentCount') }} <b>{{ selectedSummary.count }}</b></span></div>
           <form v-if="mayPay" class="payment-form" @submit.prevent="addPayment">
             <input v-model="paymentForm.payment_date" type="date" required>
-            <select v-model="paymentForm.purpose"><option v-for="item in PAYMENT_PURPOSES" :key="item">{{ item }}</option></select>
-            <input v-model.number="paymentForm.amount" type="number" min="0.01" step="0.01" placeholder="Сумма" required>
-            <select v-model="paymentForm.payment_method"><option v-for="item in PAYMENT_METHODS" :key="item">{{ item }}</option></select>
-            <button class="dark">Добавить</button>
+            <select v-model="paymentForm.purpose"><option v-for="item in PAYMENT_PURPOSES" :key="item" :value="item">{{ paymentText(item) }}</option></select>
+            <input v-model.number="paymentForm.amount" type="number" min="0.01" step="0.01" :placeholder="t('amount')" required>
+            <select v-model="paymentForm.payment_method"><option v-for="item in PAYMENT_METHODS" :key="item" :value="item">{{ paymentText(item) }}</option></select>
+            <button class="dark">{{ t('add') }}</button>
           </form>
-          <div class="payment-list"><div v-for="item in studentPayments" :key="item.id"><span>{{ formatDate(item.payment_date) }}</span><strong>{{ item.purpose }}</strong><b>{{ formatMoney(item.amount) }}</b><small>{{ item.payment_method }}</small></div><p v-if="!studentPayments.length" class="empty">Платежей пока нет</p></div>
+          <div class="payment-list"><div v-for="item in studentPayments" :key="item.id"><span>{{ formatDate(item.payment_date) }}</span><strong>{{ paymentText(item.purpose) }}</strong><b>{{ formatMoney(item.amount) }}</b><small>{{ paymentText(item.payment_method) }}</small></div><p v-if="!studentPayments.length" class="empty">{{ t('noPayments') }}</p></div>
         </section>
       </div>
       <footer>
-        <button v-if="selected.id && mayManage" class="ghost danger" @click="setArchive(selected, !selected.archived)">{{ selected.archived ? 'Восстановить' : 'В архив' }}</button>
-        <span class="spacer"></span><button class="ghost" @click="modal = ''">Закрыть</button><button v-if="mayManage" class="primary" @click="saveStudent">Сохранить</button>
+        <button v-if="selected.id && mayManage" class="ghost danger" @click="setArchive(selected, !selected.archived)">{{ selected.archived ? t('restore') : t('toArchive') }}</button>
+        <span class="spacer"></span><button class="ghost" @click="modal = ''">{{ t('close') }}</button><button v-if="mayManage" class="primary" @click="saveStudent">{{ t('save') }}</button>
       </footer>
     </section>
 
     <section v-else-if="modal === 'events'" class="modal events-modal">
-      <header><div><p class="eyebrow">АУДИТ CRM</p><h2>Журнал событий</h2></div><button class="close" @click="modal = ''">×</button></header>
+      <header><div><p class="eyebrow">{{ t('audit').toUpperCase() }}</p><h2>{{ t('eventLog') }}</h2></div><button class="close" @click="modal = ''">×</button></header>
       <div class="event-filters">
-        <select v-model="eventFilters.period"><option value="all">Всё время</option><option value="today">Сегодня</option><option value="7days">7 дней</option><option value="30days">30 дней</option></select>
-        <select v-model="eventFilters.user"><option value="">Все сотрудники</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.full_name }}</option></select>
-        <select v-model="eventFilters.type"><option value="">Все события</option><option v-for="type in [...new Set(events.map(e => e.event_type))]" :key="type" :value="type">{{ eventTitle(type) }}</option></select>
-        <input v-model="eventFilters.search" placeholder="Поиск по журналу">
+        <select v-model="eventFilters.period"><option value="all">{{ t('allTime') }}</option><option value="today">{{ t('today') }}</option><option value="7days">{{ t('days7') }}</option><option value="30days">{{ t('days30') }}</option></select>
+        <select v-model="eventFilters.user"><option value="">{{ t('allEmployees') }}</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.full_name }}</option></select>
+        <select v-model="eventFilters.type"><option value="">{{ t('allEvents') }}</option><option v-for="type in [...new Set(events.map(e => e.event_type))]" :key="type" :value="type">{{ eventTitle(type) }}</option></select>
+        <input v-model="eventFilters.search" :placeholder="t('searchLog')">
       </div>
       <div class="timeline">
-        <article v-for="event in filteredEvents" :key="event.id"><i></i><div><strong>{{ eventTitle(event.event_type) }}</strong><p>{{ event.description || `${event.old_value || ''} → ${event.new_value || ''}` }}</p><small>{{ students.find(s => s.id === event.student_id)?.full_name || 'Ученик' }} · {{ profiles.find(p => p.id === event.user_id)?.full_name || 'Сотрудник' }} · {{ formatDate(event.created_at, true) }}</small></div></article>
-        <p v-if="!filteredEvents.length" class="empty">Событий не найдено</p>
+        <article v-for="event in filteredEvents" :key="event.id"><i></i><div><strong>{{ eventTitle(event.event_type) }}</strong><p>{{ event.description || `${event.old_value || ''} → ${event.new_value || ''}` }}</p><small>{{ students.find(s => s.id === event.student_id)?.full_name || t('student') }} · {{ profiles.find(p => p.id === event.user_id)?.full_name || t('employee') }} · {{ formatDate(event.created_at, true) }}</small></div></article>
+        <p v-if="!filteredEvents.length" class="empty">{{ t('noEvents') }}</p>
       </div>
     </section>
 
     <section v-else class="modal settings-modal">
-      <header><div><p class="eyebrow">СИСТЕМА</p><h2>Настройки CRM</h2></div><button class="close" @click="modal = ''">×</button></header>
+      <header><div><p class="eyebrow">{{ t('system').toUpperCase() }}</p><h2>{{ t('crmSettings') }}</h2></div><button class="close" @click="modal = ''">×</button></header>
       <div class="form-grid modal-scroll">
-        <label>Название школы<input v-model="settings.school_name"></label>
-        <label>Название продукта<input v-model="settings.product_name"></label>
-        <label>Язык<select v-model="settings.language"><option value="ru">Русский</option><option value="lv">Latviešu</option><option value="en">English</option></select></label>
-        <label>Подзаголовок<input v-model="settings.tagline"></label>
+        <label>{{ t('schoolName') }}<input v-model="settings.school_name"></label>
+        <label>{{ t('productName') }}<input v-model="settings.product_name"></label>
+        <label>{{ t('language') }}<select v-model="settings.language"><option value="ru">Русский</option><option value="lv">Latviešu</option><option value="en">English</option></select></label>
+        <label>{{ t('tagline') }}<input v-model="settings.tagline"></label>
       </div>
-      <footer><span class="spacer"></span><button class="ghost" @click="modal = ''">Отмена</button><button class="primary" @click="saveSettings">Сохранить</button></footer>
+      <footer><span class="spacer"></span><button class="ghost" @click="modal = ''">{{ t('cancel') }}</button><button class="primary" @click="saveSettings">{{ t('save') }}</button></footer>
     </section>
   </div>
 </template>

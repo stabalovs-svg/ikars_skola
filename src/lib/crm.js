@@ -55,13 +55,13 @@ export function paymentSummary(student, payments) {
   return { paid, extra, price, left: Math.max(price - paid, 0), count: own.length }
 }
 
-export function formatMoney(value) {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
+export function formatMoney(value, locale = 'ru-RU') {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(Number(value || 0))
 }
 
-export function formatDate(value, withTime = false) {
+export function formatDate(value, withTime = false, locale = 'ru-RU') {
   if (!value) return '—'
-  return new Intl.DateTimeFormat('ru-RU', withTime
+  return new Intl.DateTimeFormat(locale, withTime
     ? { dateStyle: 'medium', timeStyle: 'short' }
     : { dateStyle: 'medium' }).format(new Date(value))
 }
