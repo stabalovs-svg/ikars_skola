@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { configured, supabase } from './lib/supabase'
+import { configured, configurationError, supabase } from './lib/supabase'
 import {
   PAYMENT_METHODS, PAYMENT_PURPOSES, ROLES, STATUSES, automaticArchiveReason,
   canAddPayment, canEditSettings, canManage, canSeeEvents, daysUntil, deadline,
@@ -90,7 +90,7 @@ function flash(message, isError = false) {
 }
 
 async function signIn() {
-  if (!configured) return flash('Добавьте Supabase URL и ключ в файл .env', true)
+  if (!configured) return flash(configurationError, true)
   loading.value = true
   const { error: authError } = await supabase.auth.signInWithPassword(login)
   loading.value = false
@@ -298,7 +298,7 @@ onMounted(async () => {
         <label>Пароль<input v-model="login.password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
         <button class="primary wide" :disabled="loading">{{ loading ? 'Подключение…' : 'Войти в CRM' }}</button>
       </form>
-      <p v-if="!configured" class="config-note">Для подключения создайте `.env` по примеру `.env.example`.</p>
+      <p v-if="!configured" class="config-note">{{ configurationError }}. Проверьте Variables и Secrets репозитория GitHub.</p>
       <p v-if="error" class="message error">{{ error }}</p>
     </section>
     <aside class="login-art"><span>01</span><strong>Держите обучение<br>в ясном фокусе.</strong></aside>
