@@ -25,6 +25,7 @@ const loading = ref(false)
 const error = ref('')
 const notice = ref('')
 const modal = ref('')
+const insightType = ref('')
 const selected = reactive({})
 const paymentForm = reactive({ payment_date: new Date().toISOString().slice(0, 10), purpose: 'Теория', amount: '', payment_method: 'Наличные' })
 const eventFilters = reactive({ period: 'all', user: '', type: '', search: '' })
@@ -57,24 +58,34 @@ const visibleStudents = computed(() => {
     })
 })
 
+function nextBirthday(student) {
+  if (!student.birth_date) return null
+  const birth = new Date(`${student.birth_date}T12:00:00`)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const date = new Date(now.getFullYear(), birth.getMonth(), birth.getDate())
+  if (date < today) date.setFullYear(date.getFullYear() + 1)
+  return { date, days: Math.round((date - today) / 86400000) }
+}
+
+const activeStudents = computed(() => students.value.filter((s) => !s.archived))
+const upcomingBirthdays = computed(() => activeStudents.value
+  .map((student) => ({ student, ...nextBirthday(student) }))
+  .filter((item) => item.date && item.days <= 14)
+  .sort((a, b) => a.date - b.date))
+const attentionStudents = computed(() => activeStudents.value
+  .map((student) => ({ student, date: deadline(student), reason: automaticArchiveReason(student) }))
+  .filter((item) => item.reason || (item.date && daysUntil(item.date) <= 30))
+  .sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0)))
+
 const dashboard = computed(() => {
-  const active = students.value.filter((s) => !s.archived)
+  const active = activeStudents.value
   return {
     total: active.length,
     theory: active.filter((s) => normalizeStatus(s.status).includes('теория')).length,
     practice: active.filter((s) => normalizeStatus(s.status).includes('вождение')).length,
-    attention: active.filter((s) => {
-      const days = daysUntil(deadline(s))
-      return automaticArchiveReason(s) || (days !== null && days <= 30)
-    }).length,
-    birthdays: active.filter((s) => {
-      if (!s.birth_date) return false
-      const birthday = new Date(s.birth_date)
-      const now = new Date()
-      const next = new Date(now.getFullYear(), birthday.getMonth(), birthday.getDate())
-      if (next < now) next.setFullYear(next.getFullYear() + 1)
-      return daysUntil(next) <= 14
-    }).length,
+    attention: attentionStudents.value.length,
+    birthdays: upcomingBirthdays.value.length,
   }
 })
 
@@ -228,7 +239,7 @@ async function setArchive(student, value, reason = 'manual', refreshAfter = true
   const { error: updateError } = await supabase.from('students').update(update).eq('id', student.id)
   if (updateError) return flash(updateError.message, true)
   try {
-    await addEvent(value ? 'student_archived' : 'student_restored', student.id, value ? 'active' : 'archived', value ? 'archived' : 'active', value ? `Причина: ${reason}` : 'Восстановлен')
+    await addEvent(value ? 'student_archived' : 'student_restored', student.id, value ? 'active' : 'archived', value ? 'archived' : 'active', value ? `Причина: ${reason}` : 'Восстановлен', value ? { reason } : null)
   } catch (eventError) {
     console.error('Не удалось записать событие архива:', eventError)
   }
@@ -269,6 +280,45 @@ async function saveSettings() {
 function setSort(field) {
   if (sort.field === field) sort.direction *= -1
   else { sort.field = field; sort.direction = 1 }
+}
+
+function openInsight(type) {
+  insightType.value = type
+  modal.value = 'insight'
+}
+
+function interpolate(key, values) {
+  return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key))
+}
+
+function archiveReasonText(reason) {
+  return ({ completed: t('completedReason'), expired: t('expiredReason'), manual: t('manualReason') })[reason] || reason || ''
+}
+
+function eventValue(event, value) {
+  if (!value) return t('notAssigned')
+  if (event.event_type === 'status_changed') return statusText(value)
+  if (event.event_type === 'instructor_changed') return instructorName(value)
+  if (event.event_type === 'student_archived') return archiveReasonText(event.metadata?.reason || event.description?.replace(/^.*:\s*/, ''))
+  return value
+}
+
+function eventDescription(event) {
+  if (event.event_type === 'student_created') return students.value.find((s) => s.id === event.student_id)?.full_name || t('eventStudentCreated')
+  if (event.event_type === 'payment_added') {
+    const data = event.metadata || {}
+    return data.amount ? `${paymentText(data.purpose)} — ${formatMoney(data.amount)} · ${paymentText(data.payment_method)}` : `${event.new_value || ''}`
+  }
+  if (['status_changed', 'instructor_changed', 'contract_changed'].includes(event.event_type)) {
+    return `${t('changedFrom')}: ${eventValue(event, event.old_value)} ${t('to')} ${eventValue(event, event.new_value)}`
+  }
+  if (event.event_type === 'student_updated') {
+    const field = ({ phone: t('phone'), email: 'Email', notes: t('notes') })[event.metadata?.field] || event.metadata?.field || ''
+    return `${field}: ${event.old_value || '—'} → ${event.new_value || '—'}`
+  }
+  if (event.event_type === 'student_archived') return archiveReasonText(event.metadata?.reason || event.description?.replace(/^.*:\s*/, ''))
+  if (event.event_type === 'student_restored') return t('eventStudentRestored')
+  return `${event.old_value || ''}${event.old_value || event.new_value ? ' → ' : ''}${event.new_value || ''}` || event.description || eventTitle(event.event_type)
 }
 
 function eventTitle(type) {
@@ -343,11 +393,11 @@ onMounted(async () => {
       <p v-if="notice" class="message success">{{ notice }}</p>
 
       <section class="metrics">
-        <article><span>{{ t('totalActive') }}</span><strong>{{ dashboard.total }}</strong><i>↗</i></article>
+        <article><span>{{ t('totalActive') }}</span><strong>{{ dashboard.total }}</strong></article>
         <article><span>{{ t('theory') }}</span><strong>{{ dashboard.theory }}</strong><small>{{ t('studentsCount') }}</small></article>
         <article><span>{{ t('practice') }}</span><strong>{{ dashboard.practice }}</strong><small>{{ t('studentsCount') }}</small></article>
-        <article class="accent"><span>{{ t('attention') }}</span><strong>{{ dashboard.attention }}</strong><small>{{ t('deadlinesStatuses') }}</small></article>
-        <article><span>{{ t('birthdays') }}</span><strong>{{ dashboard.birthdays }}</strong><small>{{ t('next14Days') }}</small></article>
+        <article class="accent clickable" role="button" tabindex="0" @click="openInsight('attention')" @keydown.enter="openInsight('attention')"><span>{{ t('attention') }}</span><strong>{{ dashboard.attention }}</strong><small>{{ t('deadlinesStatuses') }}</small><b class="metric-link">{{ t('details') }} →</b></article>
+        <article class="clickable" role="button" tabindex="0" @click="openInsight('birthdays')" @keydown.enter="openInsight('birthdays')"><span>{{ t('birthdays') }}</span><strong>{{ dashboard.birthdays }}</strong><small>{{ t('next14Days') }}</small><b class="metric-link">{{ t('details') }} →</b></article>
       </section>
 
       <section class="data-card">
@@ -388,7 +438,7 @@ onMounted(async () => {
   <div v-if="modal" class="modal-backdrop" @mousedown.self="modal = ''">
     <section v-if="modal === 'student'" class="modal student-modal">
       <header><div><p class="eyebrow">{{ (selected.id ? t('studentCard') : t('newRecord')).toUpperCase() }}</p><h2>{{ selected.full_name || t('newStudent') }}</h2></div><button class="close" @click="modal = ''">×</button></header>
-      <div v-if="selected.archived" class="archive-banner">{{ t('archivedRecord') }} · {{ selected.archive_reason }}</div>
+      <div v-if="selected.archived" class="archive-banner">{{ t('archivedRecord') }} · {{ archiveReasonText(selected.archive_reason) }}</div>
       <div class="modal-scroll">
         <div class="form-grid">
           <label class="span-2">{{ t('fullName') }}<input v-model="selected.full_name" :disabled="!mayManage" required></label>
@@ -433,9 +483,29 @@ onMounted(async () => {
         <input v-model="eventFilters.search" :placeholder="t('searchLog')">
       </div>
       <div class="timeline">
-        <article v-for="event in filteredEvents" :key="event.id"><i></i><div><strong>{{ eventTitle(event.event_type) }}</strong><p>{{ event.description || `${event.old_value || ''} → ${event.new_value || ''}` }}</p><small>{{ students.find(s => s.id === event.student_id)?.full_name || t('student') }} · {{ profiles.find(p => p.id === event.user_id)?.full_name || t('employee') }} · {{ formatDate(event.created_at, true) }}</small></div></article>
+        <article v-for="event in filteredEvents" :key="event.id"><i></i><div><strong>{{ eventTitle(event.event_type) }}</strong><p>{{ eventDescription(event) }}</p><small>{{ students.find(s => s.id === event.student_id)?.full_name || t('student') }} · {{ profiles.find(p => p.id === event.user_id)?.full_name || t('employee') }} · {{ formatDate(event.created_at, true) }}</small></div></article>
         <p v-if="!filteredEvents.length" class="empty">{{ t('noEvents') }}</p>
       </div>
+    </section>
+
+    <section v-else-if="modal === 'insight'" class="modal insights-modal">
+      <header><div><p class="eyebrow">{{ t('dashboard').toUpperCase() }}</p><h2>{{ insightType === 'birthdays' ? t('birthdayDetails') : t('attentionDetails') }}</h2></div><button class="close" @click="modal = ''">×</button></header>
+      <div class="insight-list modal-scroll">
+        <template v-if="insightType === 'birthdays'">
+          <button v-for="item in upcomingBirthdays" :key="item.student.id" @click="openStudent(item.student)">
+            <span class="insight-date"><b>{{ new Intl.DateTimeFormat(intlLocale, { day: '2-digit' }).format(item.date) }}</b>{{ new Intl.DateTimeFormat(intlLocale, { month: 'short' }).format(item.date) }}</span>
+            <span><strong>{{ item.student.full_name }}</strong><small>{{ t('birthdayOn') }}: {{ formatDate(item.date) }} · {{ item.days === 0 ? t('todayLabel') : interpolate('inDays', { days: item.days }) }}</small></span><i>→</i>
+          </button>
+          <p v-if="!upcomingBirthdays.length" class="empty">{{ t('noStudents') }}</p>
+        </template>
+        <template v-else>
+          <button v-for="item in attentionStudents" :key="item.student.id" @click="openStudent(item.student)">
+            <span class="insight-status">!</span><span><strong>{{ item.student.full_name }}</strong><small>{{ item.date ? `${t('contractUntil')}: ${formatDate(item.date)}` : t('noDeadline') }} · {{ statusText(item.student.status) }}<template v-if="item.date && daysUntil(item.date) < 0"> · {{ interpolate('overdueBy', { days: Math.abs(daysUntil(item.date)) }) }}</template></small></span><i>→</i>
+          </button>
+          <p v-if="!attentionStudents.length" class="empty">{{ t('noStudents') }}</p>
+        </template>
+      </div>
+      <footer><span class="spacer"></span><button class="ghost" @click="modal = ''">{{ t('close') }}</button></footer>
     </section>
 
     <section v-else class="modal settings-modal">
