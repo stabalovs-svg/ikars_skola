@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { configured, configurationError, supabase } from './lib/supabase'
 import logoUrl from './assets/ikars-logo.svg'
 import { paymentLabels, statusLabels, translate } from './lib/i18n'
+import DirectorDashboard from './components/DirectorDashboard.vue'
 import {
   PAYMENT_METHODS, PAYMENT_PURPOSES, ROLES, STATUSES, automaticArchiveReason,
   canAddPayment, canEditSettings, canManage, canSeeEvents, daysUntil, deadline,
@@ -45,6 +46,7 @@ const instructorName = (id) => instructors.value.find((item) => item.id === id)?
 const studentPayments = computed(() => payments.value.filter((p) => p.student_id === selected.id))
 const selectedSummary = computed(() => paymentSummary(selected, payments.value))
 const isAccountant = computed(() => role.value === ROLES.ACCOUNTANT)
+const isDirector = computed(() => role.value === ROLES.DIRECTOR)
 const financeDashboard = computed(() => {
   const summaries = students.value.filter((student) => !student.archived).map((student) => paymentSummary(student, payments.value))
   return {
@@ -148,6 +150,8 @@ async function refresh() {
   try {
     let studentQuery = role.value === ROLES.ACCOUNTANT
       ? supabase.from('students').select('id, full_name, contract_number, course_price, archived')
+      : role.value === ROLES.DIRECTOR
+        ? supabase.from('students').select('id, full_name, contract_number, category, instructor_id, status, course_price, archived')
       : role.value === ROLES.INSTRUCTOR
         ? supabase.from('students').select('id, full_name, phone, email, contract_number, category, instructor_id, birth_date, status, notes, contract_date, contract_duration_months, archived, archive_reason')
         : supabase.from('students').select('*')
@@ -396,9 +400,9 @@ onMounted(async () => {
     <aside class="sidebar">
       <div><img class="brand-logo" :src="logoUrl" alt="IKARS"><p>{{ settings.school_name }}</p></div>
       <nav>
-        <button class="active" @click="showOverview">{{ isAccountant ? t('financeOverview') : t('overview') }}</button>
-        <button v-if="!isAccountant" @click="archived = false">{{ t('students') }} <span>{{ dashboard.total }}</span></button>
-        <button v-if="!isAccountant" @click="archived = true">{{ t('archive') }}</button>
+        <button class="active" @click="showOverview">{{ isDirector ? t('directorDashboard') : (isAccountant ? t('financeOverview') : t('overview')) }}</button>
+        <button v-if="!isAccountant && !isDirector" @click="archived = false">{{ t('students') }} <span>{{ dashboard.total }}</span></button>
+        <button v-if="!isAccountant && !isDirector" @click="archived = true">{{ t('archive') }}</button>
         <button v-if="canSeeEvents(role)" @click="modal = 'events'">{{ t('journal') }}</button>
       </nav>
       <div class="user-card">
@@ -410,7 +414,7 @@ onMounted(async () => {
 
     <main class="workspace">
       <header class="topbar">
-        <div><p class="eyebrow">{{ t('workspace').toUpperCase() }}</p><h1>{{ isAccountant ? t('financeOverview') : (archived ? t('archiveStudents') : t('dashboard')) }}</h1></div>
+        <div><p class="eyebrow">{{ t('workspace').toUpperCase() }}</p><h1>{{ isDirector ? t('directorDashboard') : (isAccountant ? t('financeOverview') : (archived ? t('archiveStudents') : t('dashboard'))) }}</h1></div>
         <div class="header-actions">
           <button v-if="canSeeEvents(role)" class="ghost" @click="modal = 'events'">{{ t('eventLog') }}</button>
           <button v-if="canEditSettings(role)" class="icon-button" :title="t('settings')" @click="modal = 'settings'">⚙</button>
@@ -421,6 +425,9 @@ onMounted(async () => {
       <p v-if="error" class="message error">{{ error }}</p>
       <p v-if="notice" class="message success">{{ notice }}</p>
 
+      <DirectorDashboard v-if="isDirector" :students="students" :payments="payments" :instructors="instructors" :locale="locale" />
+
+      <template v-else>
       <section v-if="isAccountant" class="metrics finance-metrics">
         <article><span>{{ t('totalReceived') }}</span><strong>{{ formatMoney(financeDashboard.received) }}</strong></article>
         <article><span>{{ t('totalOutstanding') }}</span><strong>{{ formatMoney(financeDashboard.outstanding) }}</strong></article>
@@ -478,6 +485,7 @@ onMounted(async () => {
           </table>
         </div>
       </section>
+      </template>
     </main>
   </div>
 

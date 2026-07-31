@@ -3,6 +3,7 @@ export const ROLES = {
   MANAGER: 'manager',
   INSTRUCTOR: 'instructor',
   ACCOUNTANT: 'accountant',
+  DIRECTOR: 'director',
 }
 
 export const STATUSES = [
@@ -19,7 +20,7 @@ export const PAYMENT_METHODS = ['Наличные', 'Карта', 'Перево�
 
 export const normalizeStatus = (value = '') => value.toLocaleLowerCase('ru')
 export const canManage = (role) => [ROLES.ADMIN, ROLES.MANAGER].includes(role)
-export const canSeeEvents = (role) => [ROLES.ADMIN, ROLES.MANAGER].includes(role)
+export const canSeeEvents = (role) => [ROLES.ADMIN, ROLES.MANAGER, ROLES.DIRECTOR].includes(role)
 export const canEditSettings = (role) => role === ROLES.ADMIN
 export const canAddPayment = (role) => [ROLES.ADMIN, ROLES.MANAGER, ROLES.ACCOUNTANT].includes(role)
 
