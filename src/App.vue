@@ -44,6 +44,16 @@ const mayPay = computed(() => canAddPayment(role.value))
 const instructorName = (id) => instructors.value.find((item) => item.id === id)?.full_name || t('notAssigned')
 const studentPayments = computed(() => payments.value.filter((p) => p.student_id === selected.id))
 const selectedSummary = computed(() => paymentSummary(selected, payments.value))
+const isAccountant = computed(() => role.value === ROLES.ACCOUNTANT)
+const financeDashboard = computed(() => {
+  const summaries = students.value.filter((student) => !student.archived).map((student) => paymentSummary(student, payments.value))
+  return {
+    received: payments.value.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+    outstanding: summaries.reduce((sum, item) => sum + item.left, 0),
+    extras: summaries.reduce((sum, item) => sum + item.extra, 0),
+    count: payments.value.length,
+  }
+})
 
 const visibleStudents = computed(() => {
   const needle = search.value.trim().toLocaleLowerCase('ru')
@@ -136,14 +146,23 @@ async function refresh() {
   if (!session.value) return
   loading.value = true
   try {
-    let studentQuery = supabase.from('students').select('*')
-    if (role.value === ROLES.INSTRUCTOR && currentInstructor.value) {
-      studentQuery = studentQuery.or(`instructor_id.is.null,instructor_id.eq.${currentInstructor.value.id}`)
+    let studentQuery = role.value === ROLES.ACCOUNTANT
+      ? supabase.from('students').select('id, full_name, contract_number, course_price, archived')
+      : role.value === ROLES.INSTRUCTOR
+        ? supabase.from('students').select('id, full_name, phone, email, contract_number, category, instructor_id, birth_date, status, notes, contract_date, contract_duration_months, archived, archive_reason')
+        : supabase.from('students').select('*')
+    if (role.value === ROLES.INSTRUCTOR) {
+      if (!currentInstructor.value) {
+        studentQuery = Promise.resolve({ data: [], error: null })
+        flash(t('instructorMissing'), true)
+      } else {
+        studentQuery = studentQuery.or(`instructor_id.is.null,instructor_id.eq.${currentInstructor.value.id}`)
+      }
     }
     const [studentResult, instructorResult, paymentResult, eventResult, profileResult, settingsResult] = await Promise.all([
       studentQuery,
       supabase.from('instructors').select('*').order('full_name'),
-      supabase.from('payments').select('*').order('payment_date'),
+      role.value === ROLES.INSTRUCTOR ? Promise.resolve({ data: [], error: null }) : supabase.from('payments').select('*').order('payment_date'),
       canSeeEvents(role.value) ? supabase.from('event_log').select('*').order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
       canSeeEvents(role.value) ? supabase.from('profiles').select('id, full_name') : Promise.resolve({ data: [] }),
       supabase.from('app_settings').select('*').order('id').limit(1).maybeSingle(),
@@ -287,6 +306,16 @@ function openInsight(type) {
   modal.value = 'insight'
 }
 
+function showOverview() {
+  archived.value = false
+  search.value = ''
+  eventFilters.period = 'all'
+  eventFilters.user = ''
+  eventFilters.type = ''
+  eventFilters.search = ''
+  modal.value = ''
+}
+
 function interpolate(key, values) {
   return Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key))
 }
@@ -367,9 +396,9 @@ onMounted(async () => {
     <aside class="sidebar">
       <div><img class="brand-logo" :src="logoUrl" alt="IKARS"><p>{{ settings.school_name }}</p></div>
       <nav>
-        <button class="active">{{ t('overview') }}</button>
-        <button @click="archived = false">{{ t('students') }} <span>{{ dashboard.total }}</span></button>
-        <button @click="archived = true">{{ t('archive') }}</button>
+        <button class="active" @click="showOverview">{{ isAccountant ? t('financeOverview') : t('overview') }}</button>
+        <button v-if="!isAccountant" @click="archived = false">{{ t('students') }} <span>{{ dashboard.total }}</span></button>
+        <button v-if="!isAccountant" @click="archived = true">{{ t('archive') }}</button>
         <button v-if="canSeeEvents(role)" @click="modal = 'events'">{{ t('journal') }}</button>
       </nav>
       <div class="user-card">
@@ -381,7 +410,7 @@ onMounted(async () => {
 
     <main class="workspace">
       <header class="topbar">
-        <div><p class="eyebrow">{{ t('workspace').toUpperCase() }}</p><h1>{{ archived ? t('archiveStudents') : t('dashboard') }}</h1></div>
+        <div><p class="eyebrow">{{ t('workspace').toUpperCase() }}</p><h1>{{ isAccountant ? t('financeOverview') : (archived ? t('archiveStudents') : t('dashboard')) }}</h1></div>
         <div class="header-actions">
           <button v-if="canSeeEvents(role)" class="ghost" @click="modal = 'events'">{{ t('eventLog') }}</button>
           <button v-if="canEditSettings(role)" class="icon-button" :title="t('settings')" @click="modal = 'settings'">⚙</button>
@@ -392,7 +421,13 @@ onMounted(async () => {
       <p v-if="error" class="message error">{{ error }}</p>
       <p v-if="notice" class="message success">{{ notice }}</p>
 
-      <section class="metrics">
+      <section v-if="isAccountant" class="metrics finance-metrics">
+        <article><span>{{ t('totalReceived') }}</span><strong>{{ formatMoney(financeDashboard.received) }}</strong></article>
+        <article><span>{{ t('totalOutstanding') }}</span><strong>{{ formatMoney(financeDashboard.outstanding) }}</strong></article>
+        <article><span>{{ t('extraRevenue') }}</span><strong>{{ formatMoney(financeDashboard.extras) }}</strong></article>
+        <article><span>{{ t('paymentsMade') }}</span><strong>{{ financeDashboard.count }}</strong></article>
+      </section>
+      <section v-else class="metrics">
         <article><span>{{ t('totalActive') }}</span><strong>{{ dashboard.total }}</strong></article>
         <article><span>{{ t('theory') }}</span><strong>{{ dashboard.theory }}</strong><small>{{ t('studentsCount') }}</small></article>
         <article><span>{{ t('practice') }}</span><strong>{{ dashboard.practice }}</strong><small>{{ t('studentsCount') }}</small></article>
@@ -402,15 +437,26 @@ onMounted(async () => {
 
       <section class="data-card">
         <div class="section-head">
-          <div><h2>{{ archived ? t('archive') : t('currentStudents') }}</h2><p>{{ visibleStudents.length }} {{ t('records') }}</p></div>
+          <div><h2>{{ isAccountant ? t('financialRecords') : (archived ? t('archive') : t('currentStudents')) }}</h2><p>{{ visibleStudents.length }} {{ t('records') }}</p></div>
           <div class="filters">
             <label class="search">⌕<input v-model="search" :placeholder="t('searchStudents')"></label>
-            <button class="ghost" @click="archived = !archived">{{ archived ? t('active') : t('archive') }}</button>
+            <button v-if="!isAccountant" class="ghost" @click="archived = !archived">{{ archived ? t('active') : t('archive') }}</button>
             <button v-if="mayManage && !archived" class="ghost" @click="autoArchive">{{ t('checkDeadlines') }}</button>
           </div>
         </div>
         <div class="table-wrap">
-          <table>
+          <table v-if="isAccountant" class="finance-table">
+            <thead><tr><th>{{ t('student') }}</th><th>{{ t('contractNumber') }}</th><th>{{ t('coursePrice') }}</th><th>{{ t('totalReceived') }}</th><th>{{ t('left') }}</th><th>{{ t('paymentCount') }}</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="student in visibleStudents" :key="student.id">
+                <td><strong>{{ student.full_name }}</strong></td><td>{{ student.contract_number || t('noContract') }}</td><td>{{ formatMoney(student.course_price) }}</td>
+                <td><strong>{{ formatMoney(paymentSummary(student, payments).paid) }}</strong></td><td :class="{ urgent: paymentSummary(student, payments).left > 0 }">{{ formatMoney(paymentSummary(student, payments).left) }}</td><td>{{ paymentSummary(student, payments).count }}</td>
+                <td><button class="ghost compact" @click="openStudent(student)">{{ t('openFinance') }}</button></td>
+              </tr>
+              <tr v-if="!visibleStudents.length"><td colspan="7" class="empty">{{ t('noStudents') }}</td></tr>
+            </tbody>
+          </table>
+          <table v-else>
             <thead><tr>
               <th @click="setSort('full_name')">{{ t('student') }} ↕</th><th>{{ t('contacts') }}</th><th>{{ t('payment') }}</th>
               <th @click="setSort('category')">{{ t('category') }} ↕</th><th>{{ t('instructor') }}</th>
@@ -440,7 +486,7 @@ onMounted(async () => {
       <header><div><p class="eyebrow">{{ (selected.id ? t('studentCard') : t('newRecord')).toUpperCase() }}</p><h2>{{ selected.full_name || t('newStudent') }}</h2></div><button class="close" @click="modal = ''">×</button></header>
       <div v-if="selected.archived" class="archive-banner">{{ t('archivedRecord') }} · {{ archiveReasonText(selected.archive_reason) }}</div>
       <div class="modal-scroll">
-        <div class="form-grid">
+        <div v-if="!isAccountant" class="form-grid">
           <label class="span-2">{{ t('fullName') }}<input v-model="selected.full_name" :disabled="!mayManage" required></label>
           <label>{{ t('phone') }}<input v-model="selected.phone" :disabled="!mayManage"></label>
           <label>Email<input v-model="selected.email" type="email" :disabled="!mayManage"></label>
@@ -451,11 +497,11 @@ onMounted(async () => {
           <label>{{ t('status') }}<select v-model="selected.status" :disabled="!mayManage"><option v-for="item in STATUSES" :key="item" :value="item">{{ statusText(item) }}</option></select></label>
           <label>{{ t('contractDate') }}<input v-model="selected.contract_date" type="date" :disabled="!mayManage"></label>
           <label>{{ t('durationMonths') }}<input v-model.number="selected.contract_duration_months" type="number" min="1" :disabled="!mayManage"></label>
-          <label>{{ t('coursePrice') }}<input v-model.number="selected.course_price" type="number" min="0" step="0.01" :disabled="!mayManage"></label>
+          <label v-if="role !== ROLES.INSTRUCTOR">{{ t('coursePrice') }}<input v-model.number="selected.course_price" type="number" min="0" step="0.01" :disabled="!mayManage"></label>
           <label class="span-2">{{ t('notes') }}<textarea v-model="selected.notes" rows="3" :disabled="!mayManage"></textarea></label>
         </div>
 
-        <section v-if="selected.id" class="payments">
+        <section v-if="selected.id && role !== ROLES.INSTRUCTOR" class="payments">
           <div class="subhead"><div><p class="eyebrow">{{ t('finance').toUpperCase() }}</p><h3>{{ t('payments') }}</h3></div><strong>{{ formatMoney(selectedSummary.paid) }} <small>/ {{ formatMoney(selectedSummary.price) }}</small></strong></div>
           <div class="payment-metrics"><span>{{ t('left') }} <b>{{ formatMoney(selectedSummary.left) }}</b></span><span>{{ t('extras') }} <b>{{ formatMoney(selectedSummary.extra) }}</b></span><span>{{ t('paymentCount') }} <b>{{ selectedSummary.count }}</b></span></div>
           <form v-if="mayPay" class="payment-form" @submit.prevent="addPayment">
