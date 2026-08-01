@@ -6,7 +6,7 @@ import { paymentLabels, statusLabels, translate } from './lib/i18n'
 import DirectorDashboard from './components/DirectorDashboard.vue'
 import {
   PAYMENT_METHODS, PAYMENT_PURPOSES, ROLES, STATUSES, automaticArchiveReason,
-  canAddPayment, canEditSettings, canManage, canSeeEvents, daysUntil, deadline,
+  canAddPayment, canEditSettings, canManage, canSeeEvents, daysUntil, deadline, trainingDeadline,
   formatDate as formatDateValue, formatMoney as formatMoneyValue, normalizeStatus, paymentSummary,
 } from './lib/crm'
 
@@ -89,9 +89,19 @@ const upcomingBirthdays = computed(() => activeStudents.value
   .filter((item) => item.date && item.days <= 14)
   .sort((a, b) => a.date - b.date))
 const attentionStudents = computed(() => activeStudents.value
-  .map((student) => ({ student, date: deadline(student), reason: automaticArchiveReason(student) }))
-  .filter((item) => item.reason || (item.date && daysUntil(item.date) <= 30))
-  .sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0)))
+  .map((student) => {
+    const studyDate = trainingDeadline(student)
+    const contractDate = deadline(student)
+    const studyDays = daysUntil(studyDate)
+    const contractDays = daysUntil(contractDate)
+    const alerts = []
+    if (studyDays !== null && studyDays <= 30) alerts.push({ type: 'training', date: studyDate, days: studyDays })
+    if (contractDays !== null && contractDays <= 5) alerts.push({ type: 'contract', date: contractDate, days: contractDays })
+    if (automaticArchiveReason(student) === 'completed') alerts.push({ type: 'completed', date: null, days: 0 })
+    return { student, alerts }
+  })
+  .filter((item) => item.alerts.length)
+  .sort((a, b) => Math.min(...a.alerts.map((alert) => alert.days)) - Math.min(...b.alerts.map((alert) => alert.days))))
 
 const dashboard = computed(() => {
   const active = activeStudents.value
@@ -156,7 +166,7 @@ async function refresh() {
       : role.value === ROLES.DIRECTOR
         ? supabase.from('students').select('id, full_name, contract_number, category, instructor_id, status, course_price, archived')
       : role.value === ROLES.INSTRUCTOR
-        ? supabase.from('students').select('id, full_name, phone, email, contract_number, category, instructor_id, birth_date, status, notes, contract_date, contract_duration_months, archived, archive_reason')
+        ? supabase.from('students').select('id, full_name, phone, email, contract_number, category, instructor_id, birth_date, status, notes, contract_date, contract_duration_months, theory_start_date, archived, archive_reason')
         : supabase.from('students').select('*')
     if (role.value === ROLES.INSTRUCTOR) {
       if (!currentInstructor.value) {
@@ -364,7 +374,7 @@ function interpolate(key, values) {
 }
 
 function archiveReasonText(reason) {
-  return ({ completed: t('completedReason'), expired: t('expiredReason'), manual: t('manualReason') })[reason] || reason || ''
+  return ({ completed: t('completedReason'), expired: t('expiredReason'), theory_expired: t('theoryExpiredReason'), training_expired: t('trainingExpiredReason'), manual: t('manualReason') })[reason] || reason || ''
 }
 
 function eventValue(event, value) {
@@ -477,8 +487,8 @@ onMounted(async () => {
         <article><span>{{ t('totalActive') }}</span><strong>{{ dashboard.total }}</strong></article>
         <article><span>{{ t('theory') }}</span><strong>{{ dashboard.theory }}</strong><small>{{ t('studentsCount') }}</small></article>
         <article><span>{{ t('practice') }}</span><strong>{{ dashboard.practice }}</strong><small>{{ t('studentsCount') }}</small></article>
-        <article class="accent clickable" role="button" tabindex="0" @click="openInsight('attention')" @keydown.enter="openInsight('attention')"><span>{{ t('attention') }}</span><strong>{{ dashboard.attention }}</strong><small>{{ t('deadlinesStatuses') }}</small><b class="metric-link">{{ t('details') }} →</b></article>
-        <article class="clickable" role="button" tabindex="0" @click="openInsight('birthdays')" @keydown.enter="openInsight('birthdays')"><span>{{ t('birthdays') }}</span><strong>{{ dashboard.birthdays }}</strong><small>{{ t('next14Days') }}</small><b class="metric-link">{{ t('details') }} →</b></article>
+        <article class="accent clickable" role="button" tabindex="0" @click="openInsight('attention')" @keydown.enter="openInsight('attention')"><span>{{ t('attention') }}</span><strong>{{ dashboard.attention }}</strong><small>{{ t('deadlinesStatuses') }}</small></article>
+        <article class="clickable" role="button" tabindex="0" @click="openInsight('birthdays')" @keydown.enter="openInsight('birthdays')"><span>{{ t('birthdays') }}</span><strong>{{ dashboard.birthdays }}</strong><small>{{ t('next14Days') }}</small></article>
       </section>
 
       <section class="data-card">
@@ -516,7 +526,7 @@ onMounted(async () => {
                 <td><span class="category">{{ student.category || '—' }}</span></td>
                 <td>{{ instructorName(student.instructor_id) }}</td>
                 <td><span class="status" :data-status="normalizeStatus(student.status)">{{ statusText(student.status) }}</span></td>
-                <td><span :class="{ urgent: daysUntil(deadline(student)) !== null && daysUntil(deadline(student)) <= 30 }">{{ deadline(student) ? formatDate(deadline(student)) : '—' }}</span></td>
+                <td><span :class="{ urgent: daysUntil(deadline(student)) !== null && daysUntil(deadline(student)) <= 5 }">{{ deadline(student) ? formatDate(deadline(student)) : '—' }}</span></td>
                 <td><button class="more" @click="openStudent(student)">•••</button></td>
               </tr>
               <tr v-if="!visibleStudents.length"><td colspan="8" class="empty">{{ t('noStudents') }}</td></tr>
@@ -547,6 +557,19 @@ onMounted(async () => {
           <label v-if="role !== ROLES.INSTRUCTOR">{{ t('coursePrice') }}<input v-model.number="selected.course_price" type="number" min="0" step="0.01" :disabled="!mayManage"></label>
           <label class="span-2">{{ t('notes') }}<textarea v-model="selected.notes" rows="3" :disabled="!mayManage"></textarea></label>
         </div>
+
+        <section v-if="selected.id && !isAccountant" class="deadline-summary">
+          <article :class="{ overdue: trainingDeadline(selected) && daysUntil(trainingDeadline(selected)) < 0, warning: trainingDeadline(selected) && daysUntil(trainingDeadline(selected)) <= 30 }">
+            <p class="eyebrow">{{ t('trainingTerm').toUpperCase() }}</p>
+            <template v-if="trainingDeadline(selected)"><strong>{{ daysUntil(trainingDeadline(selected)) >= 0 ? interpolate('daysRemaining', { days: daysUntil(trainingDeadline(selected)) }) : interpolate('daysOverdue', { days: Math.abs(daysUntil(trainingDeadline(selected))) }) }}</strong><small>{{ t('theoryStarted') }}: {{ formatDate(selected.theory_start_date) }}<br>{{ normalizeStatus(selected.status) === 'теория' ? t('theoryDeadline') : t('drivingDeadline') }}: {{ formatDate(trainingDeadline(selected)) }}</small></template>
+            <template v-else><strong>—</strong><small>{{ t('theoryNotStarted') }}</small></template>
+          </article>
+          <article :class="{ overdue: deadline(selected) && daysUntil(deadline(selected)) < 0, warning: deadline(selected) && daysUntil(deadline(selected)) <= 5 }">
+            <p class="eyebrow">{{ t('contractTerm').toUpperCase() }}</p>
+            <template v-if="deadline(selected)"><strong>{{ daysUntil(deadline(selected)) >= 0 ? interpolate('daysRemaining', { days: daysUntil(deadline(selected)) }) : interpolate('daysOverdue', { days: Math.abs(daysUntil(deadline(selected))) }) }}</strong><small>{{ t('contractUntil') }}: {{ formatDate(deadline(selected)) }}</small></template>
+            <template v-else><strong>—</strong><small>{{ t('noDeadline') }}</small></template>
+          </article>
+        </section>
 
         <section v-if="isInstructorRole && selected.id" class="instructor-actions">
           <div><p class="eyebrow">{{ t('instructorActions').toUpperCase() }}</p><strong>{{ selectedIsMine ? instructorName(selected.instructor_id) : t('notAssigned') }}</strong></div>
@@ -602,7 +625,7 @@ onMounted(async () => {
         </template>
         <template v-else>
           <button v-for="item in attentionStudents" :key="item.student.id" @click="openStudent(item.student)">
-            <span class="insight-status">!</span><span><strong>{{ item.student.full_name }}</strong><small>{{ item.date ? `${t('contractUntil')}: ${formatDate(item.date)}` : t('noDeadline') }} · {{ statusText(item.student.status) }}<template v-if="item.date && daysUntil(item.date) < 0"> · {{ interpolate('overdueBy', { days: Math.abs(daysUntil(item.date)) }) }}</template></small></span><i>→</i>
+            <span class="insight-status">!</span><span><strong>{{ item.student.full_name }}</strong><small>{{ statusText(item.student.status) }}</small><small v-for="alert in item.alerts" :key="alert.type" class="alert-line"><b>{{ alert.type === 'training' ? t('trainingTerm') : alert.type === 'contract' ? t('contractTerm') : t('completedReason') }}</b><template v-if="alert.date"> · {{ formatDate(alert.date) }} · {{ alert.days >= 0 ? interpolate('daysRemaining', { days: alert.days }) : interpolate('daysOverdue', { days: Math.abs(alert.days) }) }}</template></small></span><i>→</i>
           </button>
           <p v-if="!attentionStudents.length" class="empty">{{ t('noStudents') }}</p>
         </template>

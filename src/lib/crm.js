@@ -35,15 +35,31 @@ export function deadline(student) {
   return addMonths(`${student.contract_date}T00:00:00`, student.contract_duration_months)
 }
 
+export function trainingDeadline(student) {
+  if (!student.theory_start_date) return null
+  const status = normalizeStatus(student.status)
+  const years = status === 'теория' ? 1 : (
+    ['теория сдана', 'вождение', 'вождение экзамен', 'вождение сдано'].includes(status) ? 3 : null
+  )
+  if (!years) return null
+  const result = new Date(`${student.theory_start_date}T00:00:00`)
+  result.setFullYear(result.getFullYear() + years)
+  return result
+}
+
 export function daysUntil(date) {
   if (!date) return null
-  return Math.ceil((date.getTime() - Date.now()) / 86400000)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  return Math.round((target.getTime() - today.getTime()) / 86400000)
 }
 
 export function automaticArchiveReason(student) {
   if (normalizeStatus(student.status) === 'вождение сдано') return 'completed'
-  const days = daysUntil(deadline(student))
-  return days !== null && days < 0 ? 'expired' : null
+  const days = daysUntil(trainingDeadline(student))
+  if (days === null || days >= 0) return null
+  return normalizeStatus(student.status) === 'теория' ? 'theory_expired' : 'training_expired'
 }
 
 export function paymentSummary(student, payments) {
