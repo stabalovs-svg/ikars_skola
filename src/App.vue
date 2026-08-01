@@ -526,7 +526,13 @@ onMounted(async () => {
                 <td><span class="category">{{ student.category || '—' }}</span></td>
                 <td>{{ instructorName(student.instructor_id) }}</td>
                 <td><span class="status" :data-status="normalizeStatus(student.status)">{{ statusText(student.status) }}</span></td>
-                <td><span :class="{ urgent: daysUntil(deadline(student)) !== null && daysUntil(deadline(student)) <= 5 }">{{ deadline(student) ? formatDate(deadline(student)) : '—' }}</span></td>
+                <td>
+                  <div class="table-deadlines">
+                    <span v-if="trainingDeadline(student)" :class="{ urgent: daysUntil(trainingDeadline(student)) <= 30 }"><small>{{ t('trainingTerm') }}</small>{{ formatDate(trainingDeadline(student)) }}</span>
+                    <span v-if="deadline(student)" :class="{ urgent: daysUntil(deadline(student)) <= 5 }"><small>{{ t('contractTerm') }}</small>{{ formatDate(deadline(student)) }}</span>
+                    <span v-if="!trainingDeadline(student) && !deadline(student)">—</span>
+                  </div>
+                </td>
                 <td><button class="more" @click="openStudent(student)">•••</button></td>
               </tr>
               <tr v-if="!visibleStudents.length"><td colspan="8" class="empty">{{ t('noStudents') }}</td></tr>
