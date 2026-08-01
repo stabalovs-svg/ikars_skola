@@ -50,6 +50,7 @@ const isDirector = computed(() => role.value === ROLES.DIRECTOR)
 const isInstructorRole = computed(() => role.value === ROLES.INSTRUCTOR)
 const selectedIsMine = computed(() => Boolean(selected.id && currentInstructor.value && selected.instructor_id === currentInstructor.value.id))
 const selectedIsUnassigned = computed(() => Boolean(selected.id && !selected.instructor_id))
+const selectedCanSendToExam = computed(() => selectedIsMine.value && normalizeStatus(selected.status) === 'вождение')
 const financeDashboard = computed(() => {
   const summaries = students.value.filter((student) => !student.archived).map((student) => paymentSummary(student, payments.value))
   return {
@@ -324,9 +325,10 @@ async function instructorAction(action) {
       try { await addEvent('instructor_changed', selected.id, currentInstructor.value.id, '', t('studentReleased')) } catch (eventError) { console.error(eventError) }
       flash(t('studentReleased'))
     } else if (action === 'exam') {
+      if (!selectedCanSendToExam.value) throw new Error(t('examOnlyFromDriving'))
       const examStatus = 'вождение экзамен'
       const { data, error: updateError } = await supabase.from('students')
-        .update({ status: examStatus }).eq('id', selected.id).eq('instructor_id', currentInstructor.value.id).select('id')
+        .update({ status: examStatus }).eq('id', selected.id).eq('instructor_id', currentInstructor.value.id).eq('status', 'вождение').select('id')
       if (updateError) throw updateError
       if (!data?.length) throw new Error(t('assignmentChanged'))
       try { await addEvent('status_changed', selected.id, selected.status, examStatus, t('sentToExam')) } catch (eventError) { console.error(eventError) }
@@ -582,7 +584,7 @@ onMounted(async () => {
           <div>
             <button v-if="selectedIsUnassigned" class="primary" :disabled="loading" @click="instructorAction('claim')">+ {{ t('claimStudent') }}</button>
             <button v-if="selectedIsMine" class="ghost danger" :disabled="loading" @click="instructorAction('release')">{{ t('releaseStudent') }}</button>
-            <button v-if="selectedIsMine && normalizeStatus(selected.status) !== 'вождение экзамен'" class="dark" :disabled="loading" @click="instructorAction('exam')">{{ t('sendToSchoolExam') }} →</button>
+            <button v-if="selectedCanSendToExam" class="dark" :disabled="loading" @click="instructorAction('exam')">{{ t('sendToSchoolExam') }} →</button>
           </div>
         </section>
 
