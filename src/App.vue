@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { configured, configurationError, supabase } from './lib/supabase'
 import logoUrl from './assets/ikars-logo.svg'
 import { paymentLabels, statusLabels, translate } from './lib/i18n'
+import { createDemoData, demoRoles } from './lib/demo'
 import DirectorDashboard from './components/DirectorDashboard.vue'
 import {
   PAYMENT_METHODS, PAYMENT_PURPOSES, ROLES, STATUSES, automaticArchiveReason,
@@ -31,6 +32,8 @@ const selected = reactive({})
 const paymentForm = reactive({ payment_date: new Date().toISOString().slice(0, 10), purpose: 'Теория', amount: '', payment_method: 'Наличные' })
 const eventFilters = reactive({ period: 'all', user: '', type: '', search: '' })
 const sort = reactive({ field: 'full_name', direction: 1 })
+const demoMode = import.meta.env.VITE_DEMO_MODE === 'true'
+const demoRole = ref('director')
 
 const role = computed(() => profile.value?.role || '')
 const locale = computed(() => ['ru', 'lv', 'en'].includes(settings.language) ? settings.language : 'ru')
@@ -135,6 +138,30 @@ function flash(message, isError = false) {
   window.setTimeout(() => { error.value = ''; notice.value = '' }, 4500)
 }
 
+function enterDemo(nextRole = demoRole.value) {
+  const demo = createDemoData()
+  demoRole.value = nextRole
+  students.value = nextRole === ROLES.INSTRUCTOR
+    ? demo.students.filter((item) => !item.instructor_id || item.instructor_id === 'instructor-1')
+    : demo.students
+  instructors.value = demo.instructors
+  payments.value = demo.payments
+  events.value = demo.events
+  profiles.value = demo.profiles
+  profile.value = demo.profiles.find((item) => item.role === nextRole) || demo.profiles[0]
+  session.value = { user: { id: profile.value.id, email: `${nextRole}@demo.ikars.lv` } }
+  currentInstructor.value = nextRole === ROLES.INSTRUCTOR
+    ? demo.instructors.find((item) => item.auth_user_id === profile.value.id) || null
+    : null
+  Object.assign(settings, { id: 1, school_name: 'IKARS Demo autoskola', product_name: 'IKARS Autoskolas CRM', language: 'lv', tagline: 'Autoskolas vadība vienuviet' })
+  archived.value = false
+  modal.value = ''
+}
+
+function changeDemoRole() {
+  enterDemo(demoRole.value)
+}
+
 async function signIn() {
   if (!configured) return flash(configurationError, true)
   loading.value = true
@@ -144,6 +171,10 @@ async function signIn() {
 }
 
 async function signOut() {
+  if (demoMode) {
+    enterDemo('director')
+    return
+  }
   await supabase.auth.signOut()
   session.value = null
 }
@@ -218,6 +249,10 @@ async function openStudent(student = null) {
 async function addEvent(eventType, studentId, oldValue = '', newValue = '', description = '', metadata = null) {
   if (!session.value) return
   const payload = { user_id: session.value.user.id, student_id: studentId, event_type: eventType, old_value: oldValue || '', new_value: newValue || '', description, metadata }
+  if (demoMode) {
+    events.value.unshift({ ...payload, id: crypto.randomUUID(), created_at: new Date().toISOString() })
+    return
+  }
   const { error: eventError } = await supabase.from('event_log').insert(payload)
   if (eventError) throw eventError
 }
@@ -231,6 +266,20 @@ async function saveStudent() {
     contract_duration_months: selected.contract_duration_months || null, course_price: selected.course_price || null,
   }
   if (!payload.full_name) return flash(t('requiredName'), true)
+  if (demoMode) {
+    if (selected.id) {
+      const index = students.value.findIndex((item) => item.id === selected.id)
+      if (index >= 0) students.value[index] = { ...students.value[index], ...payload }
+      await addEvent('student_updated', selected.id, '', payload.full_name, 'Demo ieraksts atjaunināts')
+    } else {
+      const created = { ...payload, id: crypto.randomUUID(), archived: false }
+      students.value.push(created)
+      await addEvent('student_created', created.id, '', created.full_name, 'Demo audzēknis izveidots')
+    }
+    modal.value = ''
+    flash(t('saved'))
+    return
+  }
   loading.value = true
   try {
     if (selected.id) {
@@ -273,6 +322,13 @@ async function setArchive(student, value, reason = 'manual', refreshAfter = true
   const update = value
     ? { archived: true, archived_at: new Date().toISOString(), archive_reason: reason }
     : { archived: false, archived_at: null, archive_reason: null }
+  if (demoMode) {
+    const index = students.value.findIndex((item) => item.id === student.id)
+    if (index >= 0) students.value[index] = { ...students.value[index], ...update }
+    await addEvent(value ? 'student_archived' : 'student_restored', student.id, value ? 'active' : 'archived', value ? 'archived' : 'active', 'Demo arhīva darbība', value ? { reason } : null)
+    modal.value = ''
+    return true
+  }
   const { error: updateError } = await supabase.from('students').update(update).eq('id', student.id)
   if (updateError) return flash(updateError.message, true)
   try {
@@ -298,6 +354,13 @@ async function autoArchive() {
 async function addPayment() {
   if (!selected.id || !paymentForm.amount || !paymentForm.payment_date) return flash(t('paymentFields'), true)
   const payload = { student_id: selected.id, payment_date: paymentForm.payment_date, purpose: paymentForm.purpose, amount: Number(paymentForm.amount), payment_method: paymentForm.payment_method }
+  if (demoMode) {
+    payments.value.push({ ...payload, id: crypto.randomUUID() })
+    await addEvent('payment_added', selected.id, '', `${payload.amount} €`, `${payload.purpose} — ${payload.amount} € (${payload.payment_method})`, payload)
+    paymentForm.amount = ''
+    flash(t('paymentAdded'))
+    return
+  }
   const { error: paymentError } = await supabase.from('payments').insert(payload)
   if (paymentError) return flash(paymentError.message, true)
   await addEvent('payment_added', selected.id, '', `${payload.amount} €`, `${payload.purpose} — ${payload.amount} € (${payload.payment_method})`, payload)
@@ -308,6 +371,18 @@ async function addPayment() {
 
 async function instructorAction(action) {
   if (!isInstructorRole.value || !selected.id || !currentInstructor.value) return
+  if (demoMode) {
+    const index = students.value.findIndex((item) => item.id === selected.id)
+    if (index < 0) return
+    if (action === 'claim' && !students.value[index].instructor_id) students.value[index].instructor_id = currentInstructor.value.id
+    if (action === 'release' && students.value[index].instructor_id === currentInstructor.value.id) students.value[index].instructor_id = null
+    if (action === 'exam' && students.value[index].instructor_id === currentInstructor.value.id) students.value[index].status = 'вождение экзамен'
+    Object.assign(selected, students.value[index])
+    await addEvent(action === 'exam' ? 'status_changed' : 'instructor_changed', selected.id, '', action, 'Demo instruktora darbība')
+    modal.value = ''
+    flash(action === 'claim' ? t('studentClaimed') : action === 'release' ? t('studentReleased') : t('sentToExam'))
+    return
+  }
   loading.value = true
   try {
     if (action === 'claim') {
@@ -345,6 +420,12 @@ async function instructorAction(action) {
 
 async function saveSettings() {
   const payload = { school_name: settings.school_name, product_name: settings.product_name, language: settings.language, tagline: settings.tagline, updated_at: new Date().toISOString() }
+  if (demoMode) {
+    Object.assign(settings, payload)
+    modal.value = ''
+    flash(t('settingsSaved'))
+    return
+  }
   const { error: settingsError } = await supabase.from('app_settings').update(payload).eq('id', settings.id || 1)
   if (settingsError) return flash(settingsError.message, true)
   modal.value = ''
@@ -414,6 +495,10 @@ function eventTitle(type) {
 }
 
 onMounted(async () => {
+  if (demoMode) {
+    enterDemo('director')
+    return
+  }
   if (!configured) return
   const { data } = await supabase.auth.getSession()
   session.value = data.session
@@ -467,6 +552,7 @@ onMounted(async () => {
       <header class="topbar">
         <div><p class="eyebrow">{{ t('workspace').toUpperCase() }}</p><h1>{{ isDirector ? t('directorDashboard') : (isAccountant ? t('financeOverview') : (archived ? t('archiveStudents') : t('dashboard'))) }}</h1></div>
         <div class="header-actions">
+          <label v-if="demoMode" class="demo-role"><span>DEMO</span><select v-model="demoRole" @change="changeDemoRole"><option v-for="item in demoRoles" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
           <button v-if="canSeeEvents(role)" class="ghost" @click="modal = 'events'">{{ t('eventLog') }}</button>
           <button v-if="canEditSettings(role)" class="icon-button" :title="t('settings')" @click="modal = 'settings'">⚙</button>
           <button v-if="mayManage" class="primary" @click="openStudent()">+ {{ t('newStudent') }}</button>
