@@ -2,6 +2,6 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  base: '/ikars_skola/',
+  base: process.env.VITE_BASE_PATH || '/ikars_skola/',
   plugins: [vue()],
 })
