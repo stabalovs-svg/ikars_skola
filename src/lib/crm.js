@@ -20,9 +20,10 @@ export const PAYMENT_METHODS = ['Наличные', 'Карта', 'Перево�
 
 export const normalizeStatus = (value = '') => value.toLocaleLowerCase('ru')
 export const canManage = (role) => [ROLES.ADMIN, ROLES.MANAGER].includes(role)
-export const canSeeEvents = (role) => [ROLES.ADMIN, ROLES.MANAGER, ROLES.DIRECTOR].includes(role)
+export const canSeeEvents = (role) => [ROLES.ADMIN, ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.DIRECTOR].includes(role)
 export const canEditSettings = (role) => role === ROLES.ADMIN
 export const canAddPayment = (role) => [ROLES.ADMIN, ROLES.MANAGER, ROLES.ACCOUNTANT].includes(role)
+export const canDeletePayment = (role) => [ROLES.ADMIN, ROLES.MANAGER, ROLES.ACCOUNTANT].includes(role)
 
 export function addMonths(date, months) {
   const result = new Date(date)

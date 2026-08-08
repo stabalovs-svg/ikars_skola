@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@600;700&display=swap');
 
+.payment-list>div{grid-template-columns:1fr 1.5fr 1fr 1fr auto!important;align-items:center}
+
 :root { color: #17231d; background: #f1f0e9; font-family: Manrope, sans-serif; font-synthesis: none; --ink:#17231d; --lime:#d9ff43; --cream:#f7f6ef; --line:#d9dbd2; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }

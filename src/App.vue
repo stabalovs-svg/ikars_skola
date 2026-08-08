@@ -6,7 +6,7 @@ import { paymentLabels, statusLabels, translate } from './lib/i18n'
 import DirectorDashboard from './components/DirectorDashboard.vue'
 import {
   PAYMENT_METHODS, PAYMENT_PURPOSES, ROLES, STATUSES, automaticArchiveReason,
-  canAddPayment, canEditSettings, canManage, canSeeEvents, daysUntil, deadline, trainingDeadline,
+  canAddPayment, canDeletePayment, canEditSettings, canManage, canSeeEvents, daysUntil, deadline, trainingDeadline,
   formatDate as formatDateValue, formatMoney as formatMoneyValue, normalizeStatus, paymentSummary,
 } from './lib/crm'
 
@@ -42,6 +42,7 @@ const formatDate = (value, withTime = false) => formatDateValue(value, withTime,
 const formatMoney = (value) => formatMoneyValue(value, intlLocale.value)
 const mayManage = computed(() => canManage(role.value))
 const mayPay = computed(() => canAddPayment(role.value))
+const mayDeletePayment = computed(() => canDeletePayment(role.value))
 const instructorName = (id) => instructors.value.find((item) => item.id === id)?.full_name || t('notAssigned')
 const studentPayments = computed(() => payments.value.filter((p) => p.student_id === selected.id))
 const selectedSummary = computed(() => paymentSummary(selected, payments.value))
@@ -298,12 +299,39 @@ async function autoArchive() {
 async function addPayment() {
   if (!selected.id || !paymentForm.amount || !paymentForm.payment_date) return flash(t('paymentFields'), true)
   const payload = { student_id: selected.id, payment_date: paymentForm.payment_date, purpose: paymentForm.purpose, amount: Number(paymentForm.amount), payment_method: paymentForm.payment_method }
-  const { error: paymentError } = await supabase.from('payments').insert(payload)
+  const { error: paymentError } = await supabase.rpc('add_payment_with_audit', {
+    p_student_id: String(payload.student_id),
+    p_payment_date: payload.payment_date,
+    p_purpose: payload.purpose,
+    p_amount: payload.amount,
+    p_payment_method: payload.payment_method,
+  })
   if (paymentError) return flash(paymentError.message, true)
-  await addEvent('payment_added', selected.id, '', `${payload.amount} €`, `${payload.purpose} — ${payload.amount} € (${payload.payment_method})`, payload)
   paymentForm.amount = ''
   await refresh()
   flash(t('paymentAdded'))
+}
+
+async function deletePayment(payment) {
+  if (!mayDeletePayment.value || !payment?.id) return
+  const reason = window.prompt(t('deletePaymentReason'))
+  if (reason === null) return
+  if (!reason.trim()) return flash(t('deletePaymentReasonRequired'), true)
+  if (!window.confirm(t('confirmDeletePayment'))) return
+  loading.value = true
+  try {
+    const { error: paymentError } = await supabase.rpc('delete_payment_with_audit', {
+      p_payment_id: String(payment.id),
+      p_reason: reason.trim(),
+    })
+    if (paymentError) throw paymentError
+    await refresh()
+    flash(t('paymentDeleted'))
+  } catch (paymentError) {
+    flash(paymentError.message, true)
+  } finally {
+    loading.value = false
+  }
 }
 
 async function instructorAction(action) {
@@ -389,9 +417,11 @@ function eventValue(event, value) {
 
 function eventDescription(event) {
   if (event.event_type === 'student_created') return students.value.find((s) => s.id === event.student_id)?.full_name || t('eventStudentCreated')
-  if (event.event_type === 'payment_added') {
+  if (['payment_added', 'payment_deleted'].includes(event.event_type)) {
     const data = event.metadata || {}
-    return data.amount ? `${paymentText(data.purpose)} — ${formatMoney(data.amount)} · ${paymentText(data.payment_method)}` : `${event.new_value || ''}`
+    if (!data.amount) return `${event.new_value || event.old_value || ''}`
+    const details = `${formatDate(data.payment_date)} · ${paymentText(data.purpose)} · ${formatMoney(data.amount)} · ${paymentText(data.payment_method)}`
+    return event.event_type === 'payment_deleted' && data.reason ? `${details} · ${t('reason')}: ${data.reason}` : details
   }
   if (['status_changed', 'instructor_changed', 'contract_changed'].includes(event.event_type)) {
     return `${t('changedFrom')}: ${eventValue(event, event.old_value)} ${t('to')} ${eventValue(event, event.new_value)}`
@@ -407,7 +437,7 @@ function eventDescription(event) {
 
 function eventTitle(type) {
   return ({
-    student_created: t('eventStudentCreated'), payment_added: t('eventPaymentAdded'), status_changed: t('eventStatusChanged'),
+    student_created: t('eventStudentCreated'), payment_added: t('eventPaymentAdded'), payment_deleted: t('eventPaymentDeleted'), status_changed: t('eventStatusChanged'),
     instructor_changed: t('eventInstructorChanged'), contract_changed: t('eventContractChanged'),
     student_updated: t('eventStudentUpdated'), student_archived: t('eventStudentArchived'), student_restored: t('eventStudentRestored'),
   })[type] || type
@@ -598,7 +628,7 @@ onMounted(async () => {
             <select v-model="paymentForm.payment_method"><option v-for="item in PAYMENT_METHODS" :key="item" :value="item">{{ paymentText(item) }}</option></select>
             <button class="dark">{{ t('add') }}</button>
           </form>
-          <div class="payment-list"><div v-for="item in studentPayments" :key="item.id"><span>{{ formatDate(item.payment_date) }}</span><strong>{{ paymentText(item.purpose) }}</strong><b>{{ formatMoney(item.amount) }}</b><small>{{ paymentText(item.payment_method) }}</small></div><p v-if="!studentPayments.length" class="empty">{{ t('noPayments') }}</p></div>
+          <div class="payment-list"><div v-for="item in studentPayments" :key="item.id"><span>{{ formatDate(item.payment_date) }}</span><strong>{{ paymentText(item.purpose) }}</strong><b>{{ formatMoney(item.amount) }}</b><small>{{ paymentText(item.payment_method) }}</small><button v-if="mayDeletePayment" class="ghost danger compact" :disabled="loading" @click="deletePayment(item)">{{ t('deletePayment') }}</button></div><p v-if="!studentPayments.length" class="empty">{{ t('noPayments') }}</p></div>
         </section>
       </div>
       <footer>
