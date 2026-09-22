@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { configured, configurationError, supabase } from './lib/supabase'
+import { configured, configurationError, demoMode, supabase } from './lib/supabase'
+import { resetDemoDb } from './lib/demoDb'
 import logoUrl from './assets/ikars-logo.svg'
 import { paymentLabels, statusLabels, translate } from './lib/i18n'
 import DirectorDashboard from './components/DirectorDashboard.vue'
@@ -147,6 +148,27 @@ async function signIn() {
 async function signOut() {
   await supabase.auth.signOut()
   session.value = null
+}
+
+const demoRoles = demoMode
+  ? [
+      { role: ROLES.DIRECTOR, label: 'Director' },
+      { role: ROLES.ADMIN, label: 'Administrator' },
+      { role: ROLES.ACCOUNTANT, label: 'Accountant' },
+      { role: ROLES.INSTRUCTOR, label: 'Instructor' },
+    ]
+  : []
+
+async function signInAs(role) {
+  loading.value = true
+  const { error: authError } = await supabase.auth.signInAs(role)
+  loading.value = false
+  if (authError) flash(authError.message, true)
+}
+
+function resetDemo() {
+  resetDemoDb()
+  window.location.reload()
 }
 
 async function loadProfile(userId) {
@@ -471,6 +493,12 @@ onMounted(async () => {
         <label>{{ t('password') }}<input v-model="login.password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
         <button class="primary wide" :disabled="loading">{{ loading ? t('connecting') : t('login') }}</button>
       </form>
+      <div v-if="demoMode" class="demo-panel">
+        <p class="demo-panel__title">Demo mode — fictional data. Anything you change stays in your browser.</p>
+        <div class="demo-panel__roles">
+          <button v-for="item in demoRoles" :key="item.role" type="button" class="ghost" :disabled="loading" @click="signInAs(item.role)">{{ item.label }}</button>
+        </div>
+      </div>
       <p v-if="!configured" class="config-note">{{ configurationError }}. {{ t('configHint') }}</p>
       <p v-if="error" class="message error">{{ error }}</p>
     </section>
@@ -491,6 +519,7 @@ onMounted(async () => {
         <div><strong>{{ profile?.full_name || session.user.email }}</strong><small>{{ role }}</small></div>
         <button :title="t('logout')" @click="signOut">↗</button>
       </div>
+      <button v-if="demoMode" class="demo-reset" type="button" @click="resetDemo">↺ Reset demo data</button>
     </aside>
 
     <main class="workspace">
