@@ -203,7 +203,7 @@ async function refresh() {
     const [studentResult, instructorResult, paymentResult, eventResult, profileResult, settingsResult] = await Promise.all([
       studentQuery,
       supabase.from('instructors').select('*').order('full_name'),
-      role.value === ROLES.INSTRUCTOR ? Promise.resolve({ data: [], error: null }) : supabase.from('payments').select('*').order('payment_date'),
+      role.value === ROLES.INSTRUCTOR ? Promise.resolve({ data: [], error: null }) : supabase.from('payments').select('*').order('payment_date', { ascending: false }),
       canSeeEvents(role.value) ? supabase.from('event_log').select('*').order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
       canSeeEvents(role.value) ? supabase.from('profiles').select('id, full_name') : Promise.resolve({ data: [] }),
       supabase.from('app_settings').select('*').order('id').limit(1).maybeSingle(),
