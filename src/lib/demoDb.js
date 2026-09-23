@@ -7,7 +7,10 @@ import {
   demoStudents, demoPayments, demoEvents,
 } from './demoSeed.js'
 
-const DB_KEY = 'ikars-demo-db-v1'
+// Bump the version when the seed data changes (e.g. dates shifted to "today")
+// so returning visitors get the refreshed demo instead of their stored copy.
+const DB_KEY = 'ikars-demo-db-v2'
+const LEGACY_DB_KEY = 'ikars-demo-db-v1'
 const SESSION_KEY = 'ikars-demo-session-v1'
 
 function seedDb() {
@@ -34,6 +37,7 @@ function getDb() {
     const raw = localStorage.getItem(DB_KEY)
     if (raw) { db = JSON.parse(raw); return db }
   } catch { /* ignore corrupt payload */ }
+  try { localStorage.removeItem(LEGACY_DB_KEY) } catch { /* ignore */ }
   db = seedDb()
   saveDb(db)
   return db

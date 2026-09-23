@@ -16,7 +16,9 @@ const dateFrom = computed(() => {
   if (filters.period === 'all') return null
   const date = new Date(); date.setHours(0, 0, 0, 0)
   if (filters.period === 'today') return date
-  if (filters.period === 'year') { date.setMonth(0, 1); return date }
+  // Rolling 12 months: a calendar-year window would leave the demo almost
+  // empty in January, so the year filter always looks back a full year.
+  if (filters.period === 'year') { date.setFullYear(date.getFullYear() - 1); return date }
   date.setDate(date.getDate() - Number(filters.period)); return date
 })
 const filteredStudents = computed(() => props.students
@@ -76,7 +78,7 @@ function exportCsv() {
 
 <template>
   <section class="director-filters">
-    <label>{{ t('period') }}<select v-model="filters.period"><option value="today">{{ t('today') }}</option><option value="7">{{ t('days7') }}</option><option value="30">{{ t('days30') }}</option><option value="year">{{ t('currentYear') }}</option><option value="all">{{ t('allTime') }}</option></select></label>
+    <label>{{ t('period') }}<select v-model="filters.period"><option value="today">{{ t('today') }}</option><option value="7">{{ t('days7') }}</option><option value="30">{{ t('days30') }}</option><option value="year">{{ t('last12Months') }}</option><option value="all">{{ t('allTime') }}</option></select></label>
     <label>{{ t('instructor') }}<select v-model="filters.instructor"><option value="">{{ t('allInstructors') }}</option><option v-for="item in instructors" :key="item.id" :value="item.id">{{ item.full_name }}</option></select></label>
     <label>{{ t('category') }}<select v-model="filters.category"><option value="">{{ t('allCategories') }}</option><option v-for="item in categories" :key="item">{{ item }}</option></select></label>
     <button class="export-btn" @click="exportCsv">↓ CSV</button>
