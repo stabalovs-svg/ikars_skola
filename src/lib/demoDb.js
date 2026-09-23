@@ -172,8 +172,13 @@ const listeners = []
 
 function readSession() {
   try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    return raw ? JSON.parse(raw) : null
+    // The demo session lives in sessionStorage, so every new visit starts on the
+    // sign-in screen while a page reload keeps the current role. Records stay in
+    // localStorage so the visitor's edits survive until they reset the demo.
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    if (raw) return JSON.parse(raw)
+    localStorage.removeItem(SESSION_KEY)
+    return null
   } catch { return null }
 }
 
@@ -188,8 +193,8 @@ function emit() {
 function setSession(session) {
   currentSession = session
   try {
-    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-    else localStorage.removeItem(SESSION_KEY)
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session))
+    else sessionStorage.removeItem(SESSION_KEY)
   } catch { /* ignore */ }
   emit()
 }

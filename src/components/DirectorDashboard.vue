@@ -4,7 +4,7 @@ import { formatMoney as money, normalizeStatus, paymentSummary } from '../lib/cr
 import { paymentLabels, translate } from '../lib/i18n'
 
 const props = defineProps({ students: Array, payments: Array, instructors: Array, locale: String })
-const filters = reactive({ period: '30', instructor: '', category: '' })
+const filters = reactive({ period: 'year', instructor: '', category: '' })
 const intl = computed(() => ({ ru: 'ru-RU', lv: 'lv-LV', en: 'en-GB' })[props.locale] || 'ru-RU')
 const t = (key) => translate(props.locale, key)
 const formatMoney = (value) => money(value, intl.value)
