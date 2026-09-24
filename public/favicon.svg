@@ -1,13 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
   <title id="title">IKARS</title>
-  <defs>
-    <linearGradient id="bg" x1="8" y1="6" x2="56" y2="60" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#119a9a"/>
-      <stop offset="1" stop-color="#087274"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
-  <path fill="#fff" d="M15 13.5c5.7 3.3 9.2 9.5 9.2 16.2v4.6c0 6.7-3.5 12.9-9.2 16.2v-37Z"/>
-  <path fill="#fff" d="M29.1 30v-6.3c0-5.8 4.7-10.5 10.5-10.5H51L34.2 30h-5.1Z"/>
-  <path fill="#fff" d="M29.1 34v6.3c0 5.8 4.7 10.5 10.5 10.5H51L34.2 34h-5.1Z"/>
+  <rect width="64" height="64" rx="15" fill="#0f7774"/>
+  <path fill="#ffffff" d="M15 13.5c5.7 3.3 9.2 9.5 9.2 16.2v4.6c0 6.7-3.5 12.9-9.2 16.2v-37Z"/>
+  <path fill="#ffffff" d="M29.1 30v-6.3c0-5.8 4.7-10.5 10.5-10.5H51L34.2 30h-5.1Z"/>
+  <path fill="#ffffff" d="M29.1 34v6.3c0 5.8 4.7 10.5 10.5 10.5H51L34.2 34h-5.1Z"/>
 </svg>
