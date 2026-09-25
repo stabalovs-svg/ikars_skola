@@ -528,6 +528,7 @@ onMounted(async () => {
       </form>
       <p v-if="!configured" class="config-note">{{ configurationError }}. {{ t('configHint') }}</p>
       <p v-if="error" class="message error">{{ error }}</p>
+      <a class="back-home" href="https://ikars.lv/">← ikars.lv</a>
     </section>
     <aside class="login-art"><span>01</span><strong>{{ t('focusA') }}<br>{{ t('focusB') }}</strong></aside>
   </main>
@@ -540,6 +541,7 @@ onMounted(async () => {
         <button v-if="!isAccountant && !isDirector" @click="archived = false">{{ t('students') }} <span>{{ dashboard.total }}</span></button>
         <button v-if="!isAccountant && !isDirector" @click="archived = true">{{ t('archive') }}</button>
         <button v-if="canSeeEvents(role)" @click="modal = 'events'">{{ t('journal') }}</button>
+        <a class="back-home" href="https://ikars.lv/">← ikars.lv</a>
       </nav>
       <div class="user-card">
         <div class="avatar">{{ (profile?.full_name || session.user.email).slice(0, 1).toUpperCase() }}</div>
@@ -552,6 +554,7 @@ onMounted(async () => {
       <header class="topbar">
         <div><p class="eyebrow">{{ t('workspace').toUpperCase() }}</p><h1>{{ isDirector ? t('directorDashboard') : (isAccountant ? t('financeOverview') : (archived ? t('archiveStudents') : t('dashboard'))) }}</h1></div>
         <div class="header-actions">
+          <a class="back-home" href="https://ikars.lv/">← ikars.lv</a>
           <label v-if="demoMode" class="demo-role"><span>DEMO</span><select v-model="demoRole" @change="changeDemoRole"><option v-for="item in demoRoles" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
           <button v-if="canSeeEvents(role)" class="ghost" @click="modal = 'events'">{{ t('eventLog') }}</button>
           <button v-if="canEditSettings(role)" class="icon-button" :title="t('settings')" @click="modal = 'settings'">⚙</button>
