@@ -26,14 +26,16 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
       - name: Build
         run: npm run build
         env:
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_DEMO_MODE: ${{ vars.VITE_DEMO_MODE || 'true' }}
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
